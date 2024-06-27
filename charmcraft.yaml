@@ -1,34 +1,17 @@
 # This file configures Charmcraft.
 # See https://juju.is/docs/sdk/charmcraft-config for guidance.
 
-# (Required)
-name: oauth2-proxy-k8s-operator
-
-
-# (Required)
+name: oauth2-proxy-k8s
 type: charm
-
-
-# (Recommended)
-title: Charm Template
-
-
-# (Required)
-summary: A very short one-line summary of the charm.
-
-
-# (Required)
+title: OAuth2 Proxy
+summary: A reverse proxy server that authenticates users through providers like Google and Github.
 description: |
-  A single sentence that says what the charm is, concisely and memorably.
+  OAuth2 Proxy is a reverse proxy and static file server that authenticates 
+  users through providers like Google and GitHub, allowing validation by email, 
+  domain, or group.
+links: 
+  documentation: https://discourse.charmhub.io/t/charmed-airbyte-ui-k8s-overview/14529 # TODO (kelkawi-a): change
 
-  A paragraph of one to three short sentences, that describe what the charm does.
-
-  A third paragraph that explains what need the charm meets.
-
-  Finally, a paragraph that describes whom the charm is useful for.
-
-
-# (Required for 'charm' type)
 bases:
   - build-on:
     - name: ubuntu
@@ -37,6 +20,11 @@ bases:
     - name: ubuntu
       channel: "22.04"
 
+# Metadata
+requires:
+  nginx-route:
+    interface: nginx-route
+    limit: 1
 
 # (Optional) Configuration options for the charm
 # This config section defines charm config options, and populates the Configure
@@ -45,33 +33,75 @@ bases:
 # General configuration documentation: https://juju.is/docs/sdk/config
 config:
   options:
-    # An example config option to customise the log level of the workload
-    log-level:
+    upstream:
       description: |
-        Configures the log level of gunicorn.
-
-        Acceptable values are: "info", "debug", "warning", "error" and "critical"
-      default: "info"
+          The HTTP url(s) of the upstream endpoint. For juju applications, this is 
+          "http://<application_name>" if it is deployed on the same model.
+      default: ""
       type: string
 
+    provider:
+      description: |
+          OAuth provider.
 
-# The containers and resources metadata apply to Kubernetes charms only.
-# See https://juju.is/docs/sdk/metadata-reference for a checklist and guidance.
+          Reference: https://oauth2-proxy.github.io/oauth2-proxy/configuration/providers/
+      default: "google"
+      type: string
 
-# Your workload’s containers.
+    client-id:
+      description: |
+          The OAuth Client ID.
+      default: ""
+      type: string
+
+    client-secret:
+      description: |
+          The OAuth Client Secret.
+      default: ""
+      type: string
+
+    cookie-secret:
+      description: |
+          The seed string for secure cookies (optionally base64 encoded).
+
+          Must be 16, 24, or 32 bytes to create an AES cipher.
+      default: ""
+      type: string
+
+    authenticated-emails-list:
+      description: |
+          Comma-separated list of users to allow to authenticate to the service.
+      default: ""
+      type: string
+
+    additional-config:
+      description: |
+          Space-separated list of additional config as defined in 
+          https://oauth2-proxy.github.io/oauth2-proxy/configuration/overview/.
+
+          Example: '--upstream-timeout=20s --whitelist-domain=example.com'
+      default: "--email-domain=*"
+      type: string
+
+    external-hostname:
+      description: |
+          The DNS listing used for external connections. Will default to the name of the deployed
+          application.
+      default: "oauth2-proxy-k8s"
+      type: string
+
+    tls-secret-name:
+      description: |
+          Name of the k8s secret which contains the TLS certificate to be used by ingress.
+      default: "oauth2-proxy-tls"
+      type: string
+
 containers:
-  some-container:
-    resource: some-container-image
+  oauth2-proxy:
+    resource: oauth2-proxy-image
 
-
-# This field populates the Resources tab on Charmhub.
 resources:
-  # An OCI image resource for each container listed above.
-  # You may remove this if your charm will run without a workload sidecar container.
-  some-container-image:
+  oauth2-proxy-image:
     type: oci-image
     description: OCI image for the 'some-container' container
-    # The upstream-source field is ignored by Juju. It is included here as a reference
-    # so the integration testing suite knows which image to deploy during testing. This field
-    # is also used by the 'canonical/charming-actions' Github action for automated releasing.
-    upstream-source: some-repo/some-image:some-tag
+    upstream-source: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0-alpine
