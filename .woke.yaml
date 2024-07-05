@@ -3,5 +3,4 @@ ignore_files:
   # whitelist.
   - lib/charms/nginx_ingress_integrator/v0/nginx_route.py
 rules:
-  # Ignore "master" - the database relation event received from the library.
-  - name: master
+  - name: whitelist
