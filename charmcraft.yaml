@@ -13,7 +13,7 @@ description: |
   users through providers like Google and GitHub, allowing validation by email, 
   domain, or group.
 links: 
-  documentation: https://discourse.charmhub.io/t/charmed-airbyte-ui-k8s-overview/14529 # TODO (kelkawi-a): change
+  documentation: https://discourse.charmhub.io/t/charmed-oauth2-proxy-k8s-overview/14663
 
 bases:
   - build-on:
