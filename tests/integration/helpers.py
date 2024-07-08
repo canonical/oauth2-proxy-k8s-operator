@@ -20,7 +20,7 @@ CHARM_CONFIG = {
     "upstream": "http://upstream",
     "client-id": "client-id",
     "client-secret": "client-secret",
-    "cookie-secret": "2YM3DvbcSVdlsPl3HHaibQdCnefGeq5gVNi4-lVX6IQ=", # sample
+    "cookie-secret": "2YM3DvbcSVdlsPl3HHaibQdCnefGeq5gVNi4-lVX6IQ=",  # sample
 }
 
 

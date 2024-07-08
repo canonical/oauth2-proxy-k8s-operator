@@ -6,8 +6,6 @@
 
 """Charm unit tests."""
 
-# pylint:disable=protected-access
-
 from unittest import TestCase, mock
 
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus
