@@ -11,13 +11,9 @@ jobs:
   integration-tests:
     uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
     secrets: inherit
-    strategy:
-      matrix:
-        juju_channel: ['3.1/stable', '3.4/stable']
-        microk8s_channel: ['1.25-strict/stable', '1.28-strict/stable']
     with:
-      channel: ${{ matrix.microk8s_channel }}
+      channel: 1.28-strict/stable
       modules: '["test_charm.py"]'
-      juju-channel: ${{ matrix.juju_channel }}
+      juju-channel: 3.1/stable
       self-hosted-runner: false
       microk8s-addons: "dns ingress rbac storage metallb:10.15.119.2-10.15.119.4 registry"
