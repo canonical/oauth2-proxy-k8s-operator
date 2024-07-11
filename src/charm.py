@@ -128,6 +128,7 @@ class Oauth2ProxyK8SOperatorCharm(CharmBase):
         """
         container = self.unit.get_container(self.name)
         if not container.can_connect():
+            event.fail("Failed to connect to the container")
             return
 
         self.unit.status = MaintenanceStatus("restarting application")
