@@ -4,12 +4,10 @@
 """Charm integration tests."""
 
 import logging
-import socket
-import unittest.mock
 
 import pytest
 import requests
-from helpers import APP_NAME, gen_patch_getaddrinfo, get_unit_url
+from helpers import APP_NAME, get_unit_url
 from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
@@ -46,9 +44,10 @@ class TestDeployment:
                 timeout=1200,
             )
 
-            with unittest.mock.patch.multiple(socket, getaddrinfo=gen_patch_getaddrinfo(new_hostname, "127.0.0.1")):
-                response = requests.get(f"https://{new_hostname}", timeout=5, verify=False)  # nosec
-                assert response.status_code == 403 and "<title>Sign In</title>" in response.text
+            response = requests.get(
+                "https://127.0.0.1", timeout=5, verify=False, headers={"Host": new_hostname}
+            )  # nosec
+            assert response.status_code == 403 and "<title>Sign In</title>" in response.text
 
     async def test_restart_action(self, ops_test: OpsTest):
         """Test charm restart action."""

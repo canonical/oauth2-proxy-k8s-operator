@@ -128,7 +128,7 @@ class Oauth2ProxyK8SOperatorCharm(CharmBase):
         """
         container = self.unit.get_container(self.name)
         if not container.can_connect():
-            event.defer()
+            event.fail("Failed to connect to the container")
             return
 
         self.unit.status = MaintenanceStatus("restarting application")
@@ -171,7 +171,7 @@ class Oauth2ProxyK8SOperatorCharm(CharmBase):
 
         container = self.unit.get_container(self.name)
         if not container.can_connect():
-            event.defer()
+            self.unit.status = WaitingStatus("waiting to connect to container")
             return
 
         command = f"/bin/oauth2-proxy --http-address=0.0.0.0:{HTTP_PORT}"

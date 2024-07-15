@@ -1,3 +1,6 @@
+[![Charmhub Badge](https://charmhub.io/oauth2-proxy-k8s/badge.svg)](https://charmhub.io/oauth2-proxy-k8s)
+[![Release Edge](https://github.com/canonical/oauth2-proxy-k8s-operator/actions/workflows/publish_charm.yaml/badge.svg)](https://github.com/canonical/oauth2-proxy-k8s-operator/actions/workflows/publish_charm.yaml)
+
 # OAuth2 Proxy K8s Operator
 
 This is the Kubernetes Python Operator for the
@@ -46,7 +49,11 @@ kubectl -n <model-name> create secret tls oauth2-proxy-tls --cert=server.crt --k
 To deploy Charmed OAuth2 Proxy, you need to run the following commands, which
 will enable ingress in your microk8s, fetch the charm from
 [Charmhub](https://charmhub.io/nginx-ingress-integrator) and deploy it to your
-model:
+model. By default, the application is configured to use Google OAuth as the
+authentication provider. A Google Cloud project can be set up using the
+instructions found
+[here](https://support.google.com/cloud/answer/6158849?hl=en). The provider can
+be changed using the `provider` config.
 
 ```bash
 # Deploy ingress controller.
@@ -56,7 +63,7 @@ sudo microk8s enable ingress:default-ssl-certificate=<model-name>/oauth2-proxy-t
 juju deploy oauth2-proxy-k8s --channel edge
 juju deploy nginx-ingress-integrator --channel edge --revision 103 --trust
 
-# Set the necessary config
+# Set the necessary config (example below for Google OAuth)
 juju config oauth2-proxy-k8s \
                 upstream=<requirer_application_name> \
                 client-id=<client_id> \
