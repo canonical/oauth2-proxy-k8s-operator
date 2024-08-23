@@ -5,6 +5,7 @@
 """Charm the application."""
 
 import logging
+import os
 
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
 from ops import main, pebble
@@ -188,6 +189,18 @@ class Oauth2ProxyK8SOperatorCharm(CharmBase):
         if self.config["additional-config"]:
             command += f" {self.config['additional-config']}"
 
+        proxy_vars = {
+            "HTTP_PROXY": "JUJU_CHARM_HTTP_PROXY",
+            "HTTPS_PROXY": "JUJU_CHARM_HTTPS_PROXY",
+            "NO_PROXY": "JUJU_CHARM_NO_PROXY",
+        }
+
+        context = {}
+        for key, env_var in proxy_vars.items():
+            value = os.environ.get(env_var)
+            if value:
+                context.update({key: value})
+
         self.model.unit.set_ports(HTTP_PORT)
         pebble_layer = {
             "summary": "oauth2 proxy layer",
@@ -197,6 +210,7 @@ class Oauth2ProxyK8SOperatorCharm(CharmBase):
                     "command": command,
                     "startup": "enabled",
                     "override": "replace",
+                    "environment": context,
                     "on-check-failure": {"up": "ignore"},
                 }
             },
