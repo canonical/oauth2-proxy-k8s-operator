@@ -1,0 +1,68 @@
+# reusable workflow for publishing all charms in this repo
+name: Publish
+
+on:
+  workflow_call:
+    inputs:
+      source_branch:
+        description: Github branch from this repo to publish.  If blank, will use the default branch
+        default: ''
+        required: false
+        type: string
+    secrets:
+      CHARMCRAFT_CREDENTIALS:
+        required: true
+
+  workflow_dispatch:
+    inputs:
+      destination_channel:
+        description: CharmHub channel to publish to
+        required: false
+        default: 'latest/edge'
+        type: string
+      source_branch:
+        description: Github branch from this repo to publish.  If blank, will use the default branch
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  publish-charm:
+    name: Publish Charm
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.source_branch }}
+
+      - name: Select charmhub channel
+        uses: canonical/charming-actions/channel@1753e0803f70445132e92acd45c905aba6473225 # 2.7.0
+        id: select-channel
+        if: ${{ inputs.destination_channel == '' }}
+
+      # Combine inputs from different sources to a single canonical value so later steps don't
+      # need logic for picking the right one
+      - name: Parse and combine inputs
+        id: parse-inputs
+        run: |
+          # destination_channel
+          destination_channel="${{ inputs.destination_channel || steps.select-channel.outputs.name }}"
+          echo "setting output of destination_channel=$destination_channel"
+          echo "::set-output name=destination_channel::$destination_channel"
+
+      # Required to charmcraft pack in non-destructive mode
+      - name: Setup lxd
+        uses: canonical/setup-lxd@v0.1.2
+        with:
+          channel: latest/stable
+
+      - name: Upload charm to charmhub
+        uses: canonical/charming-actions/upload-charm@1753e0803f70445132e92acd45c905aba6473225 # 2.7.0
+        with:
+          credentials: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          channel: ${{ steps.parse-inputs.outputs.destination_channel }}
+          destructive-mode: false

@@ -1,0 +1,59 @@
+name: Tests
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  unit-test:
+    name: Unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Install dependencies
+        run: python -m pip install tox
+
+      - name: Run tests
+        run: tox -e unit
+
+  integration-test-microk8s:
+    name: Integration tests (microk8s)
+    runs-on: ubuntu-24.04
+    needs:
+      - unit-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Setup operator environment
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: microk8s
+          channel: 1.31-strict/stable
+          juju-channel: 3.6
+          microk8s-addons: "dns ingress rbac hostpath-storage metallb:10.15.119.2-10.15.119.4 registry"
+
+      - name: Run integration tests
+        # set a predictable model name so it can be consumed by charm-logdump-action
+        run: tox -e integration -- --model testing
+
+      - name: Get contexts
+        run: kubectl config view
+        if: failure()
+
+      - name: Get juju status and relations
+        run: juju status --relations
+        if: failure()
+
+      - name: Get juju logs
+        run: juju debug-log --replay --include unit-oauth2-proxy-k8s-0
+        if: failure()
+
+      - name: Get oauth2-proxy-k8s container logs
+        run: kubectl logs oauth2-proxy-k8s-0 -c oauth2-proxy -n testing
+        if: failure()
+
+      - name: Get k8s services
+        run: kubectl get svc -n testing
+        if: failure()
