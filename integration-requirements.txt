@@ -1,0 +1,7 @@
+httpx==0.28.1
+juju==3.6.1.0
+protobuf~=5.29.0
+pytest
+pytest-operator==0.39.0
+requests
+-r requirements.txt
