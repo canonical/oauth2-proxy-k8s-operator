@@ -12,6 +12,8 @@
     "helpers:pinGitHubActionDigests",
     ":enablePreCommit"
   ],
+  "timezone": "Europe/London",
+  "schedule": ["* * * * 1,3,6"],
   "automergeType": "pr",
   "rebaseWhen": "behind-base-branch",
   "packageRules": [
@@ -20,14 +22,12 @@
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
       "automerge": true,
-      "schedule": ["at any time"],
       "additionalBranchPrefix": "auto-"
     },
     {
       "groupName": "operator pip deps",
       "matchManagers": ["pip_requirements"],
       "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
-      "schedule": ["at any time"],
       "prPriority": 5,
       "additionalBranchPrefix": "auto-"
     },
@@ -35,7 +35,6 @@
       "groupName": "operator pip deps",
       "matchManagers": ["pip_requirements"],
       "matchUpdateTypes": ["major"],
-      "schedule": ["at any time"],
       "prPriority": 5
     },
     {
@@ -43,7 +42,6 @@
       "matchManagers": ["pip_requirements"],
       "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
       "automerge": true,
-      "schedule": ["at any time"],
       "prPriority": 4,
       "additionalBranchPrefix": "auto-"
     },
@@ -60,7 +58,6 @@
       "matchManagers": ["pre-commit"],
       "matchUpdateTypes": ["major", "minor", "patch"],
       "automerge": true,
-      "schedule": ["at any time"],
       "additionalBranchPrefix": "auto-"
     }
   ]
