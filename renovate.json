@@ -1,0 +1,64 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:base",
+    ":disableDependencyDashboard",
+    ":automergeDigest",
+    ":automergePatch",
+    ":automergeMinor",
+    ":rebaseStalePrs",
+    ":semanticCommits",
+    ":semanticCommitScope(deps)",
+    "helpers:pinGitHubActionDigests",
+    ":enablePreCommit"
+  ],
+  "timezone": "Europe/London",
+  "schedule": ["* * * * 1,3,6"],
+  "automergeType": "pr",
+  "rebaseWhen": "behind-base-branch",
+  "packageRules": [
+    {
+      "groupName": "github actions",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
+      "automerge": true,
+      "additionalBranchPrefix": "auto-"
+    },
+    {
+      "groupName": "operator pip deps",
+      "matchManagers": ["pip_requirements"],
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "prPriority": 5,
+      "additionalBranchPrefix": "auto-"
+    },
+    {
+      "groupName": "operator pip deps",
+      "matchManagers": ["pip_requirements"],
+      "matchUpdateTypes": ["major"],
+      "prPriority": 5
+    },
+    {
+      "groupName": "testing pip deps",
+      "matchManagers": ["pip_requirements"],
+      "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
+      "automerge": true,
+      "prPriority": 4,
+      "additionalBranchPrefix": "auto-"
+    },
+    {
+      "groupName": "testing deps",
+      "matchFiles": ["tox.ini"],
+      "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
+      "automerge": true,
+      "schedule": ["on monday"],
+      "additionalBranchPrefix": "auto-"
+    },
+    {
+      "groupName": "pre-commit hooks",
+      "matchManagers": ["pre-commit"],
+      "matchUpdateTypes": ["major", "minor", "patch"],
+      "automerge": true,
+      "additionalBranchPrefix": "auto-"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-# Copyright 2024 Canonical Ltd.
+# Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 [tool.bandit]
@@ -17,28 +17,80 @@ show_missing = true
 minversion = "6.0"
 log_cli_level = "INFO"
 
-# Formatting tools configuration
-[tool.black]
-line-length = 120
-target-version = ["py38"]
+# Linting and formatting tools configuration
+[tool.codespell]
+# https://github.com/codespell-project/codespell
+skip = ".git,.tox,build,lib,venv,.venv,.mypy_cache,icon.svg,__pycache__"
 
 [tool.isort]
+# Profiles: https://pycqa.github.io/isort/docs/configuration/profiles.html
+line_length = 99
 profile = "black"
 
-# Linting tools configuration
-[tool.flake8]
-max-line-length = 120
-max-doc-length = 99
+[tool.ruff]
+# Default settings: https://docs.astral.sh/ruff/configuration/
+# Settings: https://docs.astral.sh/ruff/settings/
+line-length = 99
+# TODO: Include "lib/charms/oauth2_proxy_k8s/**/*.py" when integration is in place
+include = ["pyproject.toml", "src/**/*.py", "tests/**/*.py"]
+extend-exclude = ["__pycache__", "*.egg_info", "tests/unit/capture_events.py"]
+target-version = "py38"
+preview = true
+
+[tool.ruff.lint]
+# Rules: https://docs.astral.sh/ruff/rules/
+select = ["E", "W", "F", "C", "N", "D", "CPY"]
+ignore = [
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D105",
+    "D107",
+    "D203",
+    "D204",
+    "D213",
+    "D215",
+    "D400",
+    "D404",
+    "D406",
+    "D407",
+    "D408",
+    "D409",
+    "D413",
+    "D417",
+    "E501",
+    "N818"
+]
+per-file-ignores = {"tests/*" = ["D100","D101","D102","D103","D104"]}
+
+[tool.ruff.lint.flake8-copyright]
+author = "Canonical Ltd."
+
+[tool.ruff.lint.mccabe]
 max-complexity = 10
-exclude = [".git", "__pycache__", ".tox", "build", "dist", "*.egg_info", "venv"]
-select = ["E", "W", "F", "C", "N", "R", "D", "H"]
-# Ignore W503, E501 because using black creates errors with this
-# Ignore D107 Missing docstring in __init__
-ignore = ["W503", "E501", "D107"]
-# D100, D101, D102, D103: Ignore missing docstrings in tests
-per-file-ignores = ["tests/*:D100,D101,D102,D103,D104"]
-docstring-convention = "google"
-# Check for properly formatted copyright header in each file
-copyright-check = "True"
-copyright-author = "Canonical Ltd."
-copyright-regexp = "Copyright\\s\\d{4}([-,]\\d{4})*\\s+%(author)s"
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+pretty = true
+mypy_path = "./src:./lib/:./tests"
+# Exclude libraries other than oauth2-proxy-k8s
+exclude = 'lib/charms/((?!oauth2_proxy_k8s).)'
+follow_imports = "silent"
+warn_redundant_casts = true
+warn_unused_configs = true
+show_traceback = true
+show_error_codes = true
+namespace_packages = true
+explicit_package_bases = true
+check_untyped_defs = true
+allow_redefinition = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+
+# Ignore libraries that do not have type hint nor stubs
+[tool.mypy.overrides]
+module = ["ops.*", "pytest.*", "pytest_operator.*", "urllib3.*", "jinja2.*", "lightkube.*", "pytest_mock.*"]
+ignore_missing_imports = true
