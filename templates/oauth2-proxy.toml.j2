@@ -1,0 +1,26 @@
+http_address="0.0.0.0:4180"
+
+client_secret="{{ client_secret }}"
+client_id="{{ client_id }}"
+{%- if oauth_integration %}
+provider="oidc"
+provider_display_name="Identity Platform"
+oidc_issuer_url="{{ oidc_issuer_url }}"
+scope="{{ scopes }}"
+skip_provider_button="true"
+{%- endif %}
+
+{%- if authenticated_emails_file %}
+authenticated_emails_file="{{ authenticated_emails_file }}"
+{%- else %}
+email_domains="*"
+{%- endif %}
+set_xauthrequest="true"
+# TODO: Fetch endpoints that are allowed to bypass authentication
+# skip_auth_routes="GET=^/anything/allowed"
+
+# TODO: Update when forward-auth integration in place
+# Mandatory option when using oauth2-proxy with traefik
+# reverse_proxy="true"
+# Required for traefik with ForwardAuth and static upstream configuration
+# upstreams="static://202"

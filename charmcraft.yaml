@@ -11,7 +11,7 @@ summary: A reverse proxy server that authenticates users through providers like 
 description: |
   OAuth2 Proxy is a reverse proxy and static file server that authenticates 
   users through providers like Google and GitHub, allowing validation by email, 
-  domain, or group.
+  domain, or group. It is integrated with Identity Platform.
 links: 
   documentation: https://discourse.charmhub.io/t/charmed-oauth2-proxy-k8s-overview/14663
   source: https://github.com/canonical/oauth2-proxy-k8s-operator
@@ -25,11 +25,23 @@ bases:
     - name: ubuntu
       channel: "22.04"
 
+parts:
+  charm:
+    charm-binary-python-packages:
+      - jsonschema
+      - pydantic
+
 # Metadata
 requires:
-  nginx-route:
-    interface: nginx-route
+  ingress:
+    interface: ingress
+  oauth:
+    interface: oauth
     limit: 1
+
+peers:
+  oauth2-proxy:
+    interface: oauth2_proxy_peers
 
 # This config section defines charm config options, and populates the Configure
 # tab on Charmhub.
@@ -37,67 +49,11 @@ requires:
 # General configuration documentation: https://juju.is/docs/sdk/config
 config:
   options:
-    upstream:
-      description: |
-          The HTTP url(s) of the upstream endpoint. For juju applications, this is 
-          "http://<application_name>:<application_port>" if it is deployed on the same model.
-      default: ""
-      type: string
-
-    provider:
-      description: |
-          OAuth provider.
-
-          Reference: https://oauth2-proxy.github.io/oauth2-proxy/configuration/providers/
-      default: "google"
-      type: string
-
-    client-id:
-      description: |
-          The OAuth Client ID.
-      default: ""
-      type: string
-
-    client-secret:
-      description: |
-          The OAuth Client Secret.
-      default: ""
-      type: string
-
-    cookie-secret:
-      description: |
-          The seed string for secure cookies (optionally base64 encoded).
-
-          Must be 16, 24, or 32 bytes to create an AES cipher.
-      default: ""
-      type: string
 
     authenticated-emails-list:
       description: |
           Comma-separated list of users to allow to authenticate to the service.
       default: ""
-      type: string
-
-    additional-config:
-      description: |
-          Space-separated list of additional config as defined in 
-          https://oauth2-proxy.github.io/oauth2-proxy/configuration/overview/.
-
-          Example: '--upstream-timeout=20s --whitelist-domain=example.com'
-      default: "--email-domain=*"
-      type: string
-
-    external-hostname:
-      description: |
-          The DNS listing used for external connections. Will default to the name of the deployed
-          application.
-      default: "oauth2-proxy-k8s"
-      type: string
-
-    tls-secret-name:
-      description: |
-          Name of the k8s secret which contains the TLS certificate to be used by ingress.
-      default: "oauth2-proxy-tls"
       type: string
 
 containers:

@@ -1,1 +1,3 @@
 ops ~= 2.5
+jinja2
+jsonschema
