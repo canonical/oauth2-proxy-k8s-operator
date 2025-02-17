@@ -4,4 +4,7 @@ protobuf~=5.29.0
 pytest
 pytest-operator==0.40.0
 requests
+lightkube
+lightkube-models
+tenacity==9.0.0
 -r requirements.txt
