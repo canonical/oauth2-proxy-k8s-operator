@@ -6,153 +6,102 @@
 
 """Charm unit tests."""
 
-from unittest import TestCase, mock
+import json
+import logging
+from typing import Tuple
+from unittest.mock import MagicMock, Mock
 
-from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus
+import pytest
+import toml
+from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 from ops.pebble import CheckStatus
 from ops.testing import Harness
 
-from charm import Oauth2ProxyK8SOperatorCharm
-from src.charm import HTTP_PORT
+from constants import WORKLOAD_CONTAINER, WORKLOAD_SERVICE
 
-APP_NAME = "oauth2-proxy"
-mock_incomplete_pebble_plan = {"services": {"oauth2-proxy": {"override": "replace"}}}
-BASE_CONFIG = {
-    "upstream": "upstream",
-    "provider": "google",
-    "client-id": "client-id",
-    "client-secret": "client-secret",
-    "cookie-secret": "cookie-secret",
+APP_NAME = "oauth2-proxy-k8s"
+OAUTH_CLIENT_ID = "oauth2_proxy_client_id"
+OAUTH_CLIENT_SECRET = "s3cR#T"
+OAUTH_PROVIDER_INFO = {
+    "authorization_endpoint": "https://example.oidc.com/oauth2/auth",
+    "introspection_endpoint": "https://example.oidc.com/admin/oauth2/introspect",
+    "issuer_url": "https://example.oidc.com",
+    "jwks_endpoint": "https://example.oidc.com/.well-known/jwks.json",
+    "scope": "openid profile email phone",
+    "token_endpoint": "https://example.oidc.com/oauth2/token",
+    "userinfo_endpoint": "https://example.oidc.com/userinfo",
 }
 
 
-class TestCharm(TestCase):
-    """Unit tests for charm.
+def setup_peer_relation(harness: Harness) -> Tuple[int, str]:
+    relation_id = harness.add_relation("oauth2-proxy", APP_NAME)
+    return relation_id, APP_NAME
 
-    Attrs:
-        maxDiff: Specifies max difference shown by failed tests.
-    """
 
-    maxDiff = None
+def setup_ingress_relation(harness: Harness) -> Tuple[int, str]:
+    """Set up ingress relation."""
+    harness.add_network("10.0.0.1")
+    relation_id = harness.add_relation("ingress", "traefik")
+    harness.add_relation_unit(relation_id, "traefik/0")
+    url = f"http://ingress:80/{harness.model.name}-{APP_NAME}"
+    harness.update_relation_data(
+        relation_id,
+        "traefik",
+        {"ingress": json.dumps({"url": url})},
+    )
+    return relation_id, url
 
-    def setUp(self):
-        """Create setup for the unit tests."""
-        self.harness = Harness(Oauth2ProxyK8SOperatorCharm)
-        self.addCleanup(self.harness.cleanup)
-        self.harness.set_can_connect(APP_NAME, True)
-        self.harness.set_leader(True)
-        self.harness.set_model_name("oauth2-proxy-model")
-        self.harness.begin()
 
-    def test_initial_plan(self):
-        """The initial pebble plan is empty."""
-        initial_plan = self.harness.get_container_pebble_plan(APP_NAME).to_dict()
-        self.assertEqual(initial_plan, {})
+def setup_oauth_relation(harness: Harness) -> int:
+    """Set up oauth relation."""
+    relation_id = harness.add_relation("oauth", "hydra")
+    harness.add_relation_unit(relation_id, "hydra/0")
+    secret_id = harness.add_model_secret("hydra", {"secret": OAUTH_CLIENT_SECRET})
+    harness.grant_secret(secret_id, APP_NAME)
+    harness.update_relation_data(
+        relation_id,
+        "hydra",
+        {
+            "client_id": OAUTH_CLIENT_ID,
+            "client_secret_id": secret_id,
+            **OAUTH_PROVIDER_INFO,
+        },
+    )
+    return relation_id
 
-    def test_blocked_by_missing_config(self):
-        """The charm is blocked without a peer relation."""
-        harness = self.harness
 
-        # Simulate pebble readiness.
-        container = harness.model.unit.get_container(APP_NAME)
-        harness.charm.on[APP_NAME].pebble_ready.emit(container)
+class TestPebbleReadyEvent:
+    def test_pebble_container_can_connect(self, harness: Harness) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        setup_peer_relation(harness)
+        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
 
-        # No plans are set yet.
-        got_plan = harness.get_container_pebble_plan(APP_NAME).to_dict()
-        self.assertEqual(got_plan, {})
+        assert isinstance(harness.charm.unit.status, ActiveStatus)
+        service = harness.model.unit.get_container(WORKLOAD_CONTAINER).get_service(WORKLOAD_SERVICE)
+        assert service.is_running()
 
-        # The BlockStatus is set with a message.
-        self.assertEqual(harness.model.unit.status, BlockedStatus("missing `upstream` config"))
+    def test_pebble_container_cannot_connect(self, harness: Harness) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, False)
+        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
 
-        harness.update_config({"upstream": "upstream"})
-        self.assertEqual(harness.model.unit.status, BlockedStatus("missing `cookie-secret` config"))
+        assert harness.charm.unit.status == WaitingStatus("Waiting to connect to OAuth2-Proxy container")
 
-        harness.update_config({"cookie-secret": "cookie-secret"})
-        self.assertEqual(
-            harness.model.unit.status,
-            BlockedStatus("`client-id` and `client-secret` config must be set for `google` provider"),
-        )
+    def test_on_pebble_ready_correct_plan(self, harness: Harness, mocked_cookie_encryption_key: MagicMock) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        setup_peer_relation(harness)
+        container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
+        harness.charm.on.oauth2_proxy_pebble_ready.emit(container)
 
-        harness.update_config({"client-id": "client-id", "client-secret": "client-secret"})
-        self.assertEqual(
-            harness.model.unit.status,
-            MaintenanceStatus("replanning application"),
-        )
-
-    def test_ingress(self):
-        """The charm relates correctly to the nginx ingress charm and can be configured."""
-        harness = self.harness
-
-        simulate_lifecycle(harness)
-
-        nginx_route_relation_id = harness.add_relation("nginx-route", "ingress")
-        harness.charm._require_nginx_route()
-
-        assert harness.get_relation_data(nginx_route_relation_id, harness.charm.app) == {
-            "service-namespace": harness.charm.model.name,
-            "service-hostname": harness.charm.app.name,
-            "service-name": harness.charm.app.name,
-            "service-port": str(HTTP_PORT),
-            "tls-secret-name": "oauth2-proxy-tls",
-            "backend-protocol": "HTTP",
-        }
-
-    def test_ingress_update_hostname(self):
-        """The charm relates correctly to the nginx ingress charm and can be configured."""
-        harness = self.harness
-
-        simulate_lifecycle(harness)
-
-        nginx_route_relation_id = harness.add_relation("nginx-route", "ingress")
-
-        new_hostname = "new-oauth2-proxy-k8s"
-        harness.update_config({"external-hostname": new_hostname})
-        harness.charm._require_nginx_route()
-
-        assert harness.get_relation_data(nginx_route_relation_id, harness.charm.app) == {
-            "service-namespace": harness.charm.model.name,
-            "service-hostname": new_hostname,
-            "service-name": harness.charm.app.name,
-            "service-port": str(HTTP_PORT),
-            "tls-secret-name": "oauth2-proxy-tls",
-            "backend-protocol": "HTTP",
-        }
-
-    def test_ingress_update_tls(self):
-        """The charm relates correctly to the nginx ingress charm and can be configured."""
-        harness = self.harness
-
-        simulate_lifecycle(harness)
-
-        nginx_route_relation_id = harness.add_relation("nginx-route", "ingress")
-
-        new_tls = "new-tls"
-        harness.update_config({"tls-secret-name": new_tls})
-        harness.charm._require_nginx_route()
-
-        assert harness.get_relation_data(nginx_route_relation_id, harness.charm.app) == {
-            "service-namespace": harness.charm.model.name,
-            "service-hostname": harness.charm.app.name,
-            "service-name": harness.charm.app.name,
-            "service-port": str(HTTP_PORT),
-            "tls-secret-name": new_tls,
-            "backend-protocol": "HTTP",
-        }
-
-    def test_ready(self):
-        """The pebble plan is correctly generated when the charm is ready."""
-        harness = self.harness
-
-        simulate_lifecycle(harness)
-
-        # The plan is generated after pebble is ready.
-        want_plan = {
+        expected_plan = {
             "services": {
-                APP_NAME: {
-                    "summary": APP_NAME,
-                    "command": "/bin/oauth2-proxy --http-address=0.0.0.0:80 --upstream=upstream --provider=google --client-id=client-id --client-secret=client-secret --cookie-secret=cookie-secret --email-domain=*",
+                WORKLOAD_SERVICE: {
+                    "summary": WORKLOAD_SERVICE,
+                    "command": "/bin/oauth2-proxy --config /etc/config/oauth2-proxy/oauth2-proxy.cfg",
                     "startup": "enabled",
                     "override": "replace",
+                    "environment": {
+                        "OAUTH2_PROXY_COOKIE_SECRET": mocked_cookie_encryption_key,
+                    },
                     "on-check-failure": {"up": "ignore"},
                 }
             },
@@ -160,84 +109,117 @@ class TestCharm(TestCase):
                 "up": {
                     "override": "replace",
                     "period": "10s",
-                    "http": {"url": f"http://localhost:{HTTP_PORT}/ready"},
+                    "http": {"url": "http://localhost:4180/ready"},
                 }
             },
         }
+        updated_plan = harness.get_container_pebble_plan(WORKLOAD_CONTAINER).to_dict()
+        assert expected_plan == updated_plan
 
-        got_plan = harness.get_container_pebble_plan(APP_NAME).to_dict()
-        self.assertEqual(got_plan, want_plan)
+    def test_oauth2_proxy_config_on_pebble_ready(self, harness: Harness) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        setup_peer_relation(harness)
+        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+        container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
 
-        # The service was started.
-        service = harness.model.unit.get_container(APP_NAME).get_service(APP_NAME)
-        self.assertTrue(service.is_running())
+        container_config = container.pull(path="/etc/config/oauth2-proxy/oauth2-proxy.cfg", encoding="utf-8")
 
-    def test_update_status_up(self):
-        """The charm updates the unit status to active based on UP status."""
-        harness = self.harness
+        config = toml.load(container_config)
+        assert config["client_id"] == "default"
+        assert config["client_secret"] == "default"
+        assert config["email_domains"] == "*"
+        assert config["set_xauthrequest"] == "true"
 
-        simulate_lifecycle(harness)
 
-        container = harness.model.unit.get_container(APP_NAME)
-        container.get_check = mock.Mock(status="up")
+class TestConfigChangedEvent:
+    def test_authenticated_emails_list_config_changed(self, harness: Harness) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        setup_peer_relation(harness)
+        harness.update_config({"authenticated-emails-list": "test@example.com,test1@example.com"})
+
+        container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
+        assert container.pull(path="/etc/config/oauth2-proxy/access_list.cfg", encoding="utf-8")
+
+        container_config = container.pull(path="/etc/config/oauth2-proxy/oauth2-proxy.cfg", encoding="utf-8")
+        config = toml.load(container_config)
+        assert config["authenticated_emails_file"] == "/etc/config/oauth2-proxy/access_list.cfg"
+
+
+class TestUpdateStatusEvent:
+    def test_update_status_up(self, harness: Harness) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        setup_peer_relation(harness)
+
+        container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
+        container.get_check = Mock(status="up")
         container.get_check.return_value.status = CheckStatus.UP
         harness.charm.on.update_status.emit()
 
-        self.assertEqual(harness.model.unit.status, ActiveStatus())
+        assert harness.model.unit.status == ActiveStatus()
 
-    def test_update_status_down(self):
-        """The charm updates the unit status to maintenance based on DOWN status."""
-        harness = self.harness
+    def test_update_status_down(self, harness: Harness) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        setup_peer_relation(harness)
+        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
 
-        simulate_lifecycle(harness)
-
-        container = harness.model.unit.get_container(APP_NAME)
-        container.get_check = mock.Mock(status="up")
+        container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
+        container.get_check = Mock(status="up")
         container.get_check.return_value.status = CheckStatus.DOWN
         harness.charm.on.update_status.emit()
 
-        self.assertEqual(harness.model.unit.status, MaintenanceStatus("Status check: DOWN"))
-
-    def test_incomplete_pebble_plan(self):
-        """The charm re-applies the pebble plan if incomplete."""
-        harness = self.harness
-        simulate_lifecycle(harness)
-
-        container = harness.model.unit.get_container(APP_NAME)
-        container.add_layer(APP_NAME, mock_incomplete_pebble_plan, combine=True)
-        harness.charm.on.update_status.emit()
-
-        self.assertEqual(
-            harness.model.unit.status,
-            MaintenanceStatus("replanning application"),
-        )
-        plan = harness.get_container_pebble_plan(APP_NAME).to_dict()
-        assert plan != mock_incomplete_pebble_plan
-
-    @mock.patch("charm.Oauth2ProxyK8SOperatorCharm._validate_pebble_plan", return_value=True)
-    def test_missing_pebble_plan(self, mock_validate_pebble_plan):
-        """The charm re-applies the pebble plan if missing."""
-        harness = self.harness
-        simulate_lifecycle(harness)
-
-        mock_validate_pebble_plan.return_value = False
-        harness.charm.on.update_status.emit()
-        self.assertEqual(
-            harness.model.unit.status,
-            MaintenanceStatus("replanning application"),
-        )
-        plan = harness.get_container_pebble_plan(APP_NAME).to_dict()
-        assert plan is not None
+        assert harness.model.unit.status == MaintenanceStatus("Status check: DOWN")
 
 
-def simulate_lifecycle(harness):
-    """Simulate a healthy charm life-cycle.
+class TestIngressIntegrationEvents:
+    def test_ingress_relation_created(self, harness: Harness) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
 
-    Args:
-        harness: ops.testing.Harness object used to simulate charm lifecycle.
-    """
-    # Simulate pebble readiness.
-    container = harness.model.unit.get_container(APP_NAME)
-    harness.charm.on[APP_NAME].pebble_ready.emit(container)
+        relation_id, url = setup_ingress_relation(harness)
+        assert url == "http://ingress:80/testing-oauth2-proxy-k8s"
 
-    harness.update_config(BASE_CONFIG)
+        app_data = harness.get_relation_data(relation_id, harness.charm.app)
+        assert app_data == {
+            "model": json.dumps(harness.model.name),
+            "name": json.dumps("oauth2-proxy-k8s"),
+            "port": json.dumps(4180),
+            "strip-prefix": json.dumps(True),
+        }
+
+    def test_ingress_relation_revoked(self, harness: Harness, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.INFO)
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+
+        relation_id, _ = setup_ingress_relation(harness)
+        caplog.clear()
+        harness.remove_relation(relation_id)
+
+        assert "This app no longer has ingress" in caplog.record_tuples[3]
+
+
+class TestOAuthIntegrationEvents:
+    def test_oauth_relation_requirer_data_sent(self, harness: Harness, mocked_cookie_encryption_key: MagicMock) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        relation_id = setup_oauth_relation(harness)
+
+        app_data = harness.get_relation_data(relation_id, harness.charm.app)
+        assert app_data == {
+            "redirect_uri": "http://oauth2-proxy-k8s.testing.svc.cluster.local:4180/oauth2/callback",
+            "scope": "openid email profile offline_access",
+            "token_endpoint_auth_method": "client_secret_basic",
+            "grant_types": '["authorization_code", "refresh_token"]',
+            "audience": '[]'
+        }
+
+    def test_config_is_updated_with_oauth_relation_data(self, harness: Harness) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        setup_peer_relation(harness)
+        setup_oauth_relation(harness)
+        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+
+        container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
+        container_config = container.pull(path="/etc/config/oauth2-proxy/oauth2-proxy.cfg", encoding="utf-8")
+
+        config = toml.load(container_config)
+        assert config["client_id"] == OAUTH_CLIENT_ID
+        assert config["client_secret"] == OAUTH_CLIENT_SECRET
+        assert config["oidc_issuer_url"] == "https://example.oidc.com"
