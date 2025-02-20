@@ -57,3 +57,13 @@ jobs:
       - name: Get k8s services
         run: kubectl get svc -n testing
         if: failure()
+
+      - name: Get oauth2 proxy config file
+        run: |
+          juju ssh oauth2-proxy-k8s/0 "PYTHONPATH=agents/unit-oauth2-proxy-k8s-0/charm/venv/ python3 -c '
+          from ops import pebble
+          p = pebble.Client(\"/charm/containers/oauth2-proxy/pebble.socket\")
+          f = p.pull(\"/etc/config/oauth2-proxy/oauth2-proxy.cfg\")
+          print(f.read())
+          '"
+        if: failure()
