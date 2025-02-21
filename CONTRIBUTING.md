@@ -1,67 +1,63 @@
 # Contributing
 
-To make contributions to this charm, you'll need a working
-[development setup](https://juju.is/docs/sdk/dev-setup).
+## Overview
 
-First, install the required version of `tox`:
+This document explains the processes and practices recommended for contributing
+enhancements to this operator.
+
+- Generally, before developing bugs or enhancements to this charm, you
+  should [open an issue](https://github.com/canonical/oauth2-proxy-k8s-operator/issues)
+  explaining your use case.
+- If you would like to chat with us about charm development, you can reach us
+  at [Canonical Matrix public channel](https://matrix.to/#/#charmhub-charmdev:ubuntu.com)
+  or [Discourse](https://discourse.charmhub.io/).
+- Familiarising yourself with the [Charmed Operator Framework](https://juju.is/docs/sdk) library
+  will help you a lot when working on new features or bug fixes.
+- All enhancements require review before being merged. Code review typically
+  examines
+  - code quality
+  - test coverage
+  - user experience for Juju administrators of this charm.
+- Please help us out in ensuring easy to review branches by rebasing your pull
+  request branch onto the `main` branch. This also avoids merge commits and
+  creates a linear Git commit history.
+
+## Developing
+
+You can use the environments created by `tox` for development. It helps
+install `pre-commit`, `mypy` type checker, linting tools, and formatting tools.
 
 ```shell
-pip install -r dev-requirements.txt
-```
-
-You can create an environment for development with `tox`:
-
-```shell
-tox devenv -e integration
-source venv/bin/activate
+tox -e dev
+source .tox/dev/bin/activate
 ```
 
 ## Testing
 
-This project uses `tox` for managing test environments. There are some
-pre-configured environments that can be used for linting and formatting code
-when you're preparing contributions to the charm:
-
 ```shell
-tox run -e format        # update your code according to linting rules
-tox run -e lint          # code style
-tox run -e static        # static type checking
-tox run -e unit          # unit tests
-tox run -e integration   # integration tests
-tox                      # runs 'format', 'lint', 'static', and 'unit' environments
+tox -e lint          # lint checks
+tox -e unit          # unit tests
+tox -e integration   # integration tests
 ```
 
-### Committing
+## Building
 
-This repo uses CI/CD workflows as outlined by
-[operator-workflows](https://github.com/canonical/operator-workflows). The four
-workflows are as follows:
+Build the charm in this git repository using:
 
-- `test.yaml`: This is a series of tests including linting, unit tests and
-  library checks which run on every pull request.
-- `integration_test.yaml`: This runs the suite of integration tests included
-  with the charm and runs on every pull request.
-- `publish_charm.yaml`: This runs either by manual dispatch or on every push to
-  the main branch or a special track/\*\* branch. Once a PR is merged with one
-  of these branches, this workflow runs to ensure the tests have passed before
-  building the charm and publishing the new version to the edge channel on
-  Charmhub.
-- `promote_charm.yaml`: This is a manually triggered workflow which publishes
-  the charm currently on the edge channel to the stable channel on Charmhub.
+```bash
+charmcraft pack
+```
 
-These tests validate extensive linting and formatting rules. Before creating a
-PR, please run `tox` to ensure proper formatting and linting is performed.
-
-### Deploy
+### Deploying
 
 This charm is used to deploy OAuth2 Proxy in a k8s cluster. For a local
-deployment, follow the following steps:
+deployment, follow the steps below:
 
 #### Install Microk8s
 
 ```bash
 # Install Microk8s from snap
-sudo snap install microk8s --classic --channel=1.25
+sudo snap install microk8s --classic --channel=1.31-strict/stable
 
 # Install charmcraft from snap
 sudo snap install charmcraft --classic
@@ -102,37 +98,25 @@ juju debug-log
 #### Deploy Charm
 
 ```bash
-# Pack the charm
-charmcraft pack # the --destructive-mode flag can be used to pack the charm using the current host.
-
 # Deploy the charm
-juju deploy ./oauth2-proxy-k8s_ubuntu-22.04-amd64.charm --resource oauth2-proxy-image=quay.io/oauth2-proxy/oauth2-proxy:v7.6.0-alpine
+juju deploy ./*-amd64.charm --resource oauth2-proxy-image=$(yq eval '.resources.oauth2-proxy-image.upstream-source' charmcraft.yaml) --trust
 
 # When making changes, refresh the charm
-charmcraft pack && juju refresh --path="./oauth2-proxy-k8s_ubuntu-22.04-amd64.charm" oauth2-proxy-k8s --force-units --resource oauth2-proxy-image=quay.io/oauth2-proxy/oauth2-proxy:v7.6.0-alpine
+charmcraft pack && juju refresh --path="./*amd64.charm" oauth2-proxy-k8s --force-units oauth2-proxy-image=$(yq eval '.resources.oauth2-proxy-image.upstream-source' charmcraft.yaml) --trust
 ```
 
-#### Relate Charms
+#### Integrate Charms
 
 ```bash
-# Generate private key
-openssl genrsa -out server.key 2048
+# Deploy traefik operator
+juju deploy traefik-k8s --channel latest/stable --trust
+juju integrate oauth2-proxy-k8s:ingress traefik-k8s
 
-# Generate a certificate signing request
-openssl req -new -key server.key -out server.csr -subj "/CN=oauth2-proxy-k8s"
+# Deploy Identity Platform
+juju deploy identity-platform --channel latest/edge --trust
 
-# Create self-signed certificate
-openssl x509 -req -days 365 -in server.csr -signkey server.key -out server.crt -extfile <(printf "subjectAltName=DNS:oauth2-proxy-k8s")
-
-# Create a k8s secret
-kubectl create secret tls oauth2-proxy-tls --cert=server.crt --key=server.key
-
-# Deploy ingress controller
-microk8s enable ingress:default-ssl-certificate=oauth2-proxy-model/oauth2-proxy
-
-# Deploy nginx operator
-juju deploy nginx-ingress-integrator --channel edge --revision 103 --trust
-juju relate oauth2-proxy-k8s nginx-ingress-integrator
+# Integrate with oauth
+juju integrate oauth2-proxy-k8s:oauth hydra
 ```
 
 #### Cleanup
@@ -142,8 +126,13 @@ juju relate oauth2-proxy-k8s nginx-ingress-integrator
 # Either remove individual applications
 # (The --force flag can optionally be included if any of the units are in error state)
 juju remove-application oauth2-proxy-k8s
-juju remove-application nginx-ingress-integrator
 
 # Or remove whole model
 juju destroy-model oauth2-proxy-model
 ```
+
+## Canonical Contributor Agreement
+
+Canonical welcomes contributions to Charmed OAuth2 Proxy. Please check out
+our [contributor agreement](https://ubuntu.com/legal/contributors) if you're
+interested in contributing to the solution.
