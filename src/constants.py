@@ -18,4 +18,7 @@ NO_PROXY = "JUJU_CHARM_NO_PROXY"
 OAUTH_SCOPES = "openid email profile offline_access"
 OAUTH_GRANT_TYPES = ["authorization_code", "refresh_token"]
 
+AUTH_PROXY_RELATION_NAME = "auth-proxy"
+FORWARD_AUTH_RELATION_NAME = "forward-auth"
+
 PEER = "oauth2-proxy"
