@@ -109,8 +109,12 @@ charmcraft pack && juju refresh --path="./*amd64.charm" oauth2-proxy-k8s --force
 
 ```bash
 # Deploy traefik operator
-juju deploy traefik-k8s --channel latest/stable --trust
-juju integrate oauth2-proxy-k8s:ingress traefik-k8s
+juju deploy traefik-k8s traefik-public --channel latest/stable --trust
+
+# Integrate traefik with oauth2-proxy
+juju integrate oauth2-proxy-k8s:ingress traefik-public
+juju config traefik-public enable_experimental_forward_auth=True
+juju integrate oauth2-proxy-k8s traefik-public:experimental-forward-auth
 
 # Deploy Identity Platform
 juju deploy identity-platform --channel latest/edge --trust
@@ -118,6 +122,30 @@ juju deploy identity-platform --channel latest/edge --trust
 # Integrate with oauth
 juju integrate oauth2-proxy-k8s:oauth hydra
 ```
+
+In order to test the e2e flow, you can use a [simple charm](https://github.com/canonical/oauth2-proxy-k8s-operator/blob/main/tests/integration/auth-proxy-requirer)
+that runs httpbin:
+
+```bash
+# Pack and deploy
+cd tests/integration/auth-proxy-requirer
+charmcraft pack
+juju deploy ./*-amd64.charm --resource oci-image=kennethreitz/httpbin --trust
+
+# Provide integrations
+juju integrate auth-proxy-requirer:ingress traefik-public
+juju integrate auth-proxy-requirer:auth-proxy oauth2-proxy-k8s
+```
+
+Then, create a user in kratos:
+
+```bash
+juju run kratos/0 create-admin-account email=test@example.com username=test
+```
+
+Finally, retrieve the public IP of the `auth-proxy-requirer` charm
+and go to `https://<traefik-ip>/<model>-auth-proxy-requirer/anything`.
+You will be redirected to sign in with the Identity Platform.
 
 #### Cleanup
 
