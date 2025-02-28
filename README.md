@@ -4,7 +4,7 @@
 # OAuth2 Proxy K8s Operator
 
 This is the Kubernetes Python Operator for the
-[OAuth2 proxy](https://oauth2-proxy.github.io/oauth2-proxy/).
+[OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/).
 
 ## Description
 
@@ -14,7 +14,7 @@ or group.
 
 This operator provides the OAuth2 proxy, and consists of Python scripts which
 wraps the versions distributed by
-[OAuth2 proxy](https://quay.io/repository/oauth2-proxy/oauth2-proxy?tab=tags&tag=latest).
+[OAuth2 Proxy](https://quay.io/repository/oauth2-proxy/oauth2-proxy?tab=tags&tag=latest).
 
 ## Usage
 
@@ -30,29 +30,52 @@ juju deploy oauth2-proxy-k8s --channel edge --trust
 You can follow the deployment status with `watch -c juju status --color`.
 
 ## Integrations
-<!-- TODO: Update this section when forward-auth and auth-proxy are integrated. -->
 
 ### Ingress
 
-The Charmed OAuth2 Proxy offers integration with
-the [traefik-k8s-operator](https://github.com/canonical/traefik-k8s-operator)
-for ingress.
+The Charmed OAuth2 Proxy offers integration with the [traefik-k8s-operator](https://github.com/canonical/traefik-k8s-operator) for ingress.
 
 In order to provide ingress to the application, run:
 
 ```shell
-juju deploy traefik-k8s --channel latest/stable --trust
-juju integrate traefik-k8s oauth2-proxy-k8s:ingress
+juju deploy traefik-k8s traefik-public --channel latest/stable --trust
+juju integrate traefik-public oauth2-proxy-k8s:ingress
+```
+
+### Traefik ForwardAuth
+
+OAuth2 Proxy offers integration with
+Traefik [ForwardAuth](https://doc.traefik.io/traefik/middlewares/http/forwardauth/)
+middleware via `forward_auth` interface.
+
+It can be added by deploying
+the [Traefik charmed operator](https://charmhub.io/traefik-k8s), enabling the
+experimental feature and adding a juju integration:
+
+```shell
+juju config traefik-public enable_experimental_forward_auth=True
+juju integrate oauth2-proxy-k8s traefik-public:experimental-forward-auth
+```
+
+### Auth Proxy
+
+OAuth2 Proxy can be integrated with downstream charmed operators
+using `auth_proxy` interface.
+
+To have your charm protected by the proxy, make sure that:
+
+- it is integrated with Traefik using one of the [ingress interfaces](https://github.com/canonical/traefik-k8s-operator/tree/main/lib/charms/traefik_k8s)
+- it provides OAuth2 Proxy with necessary data by supporting
+  the [integration](https://github.com/canonical/oauth2-proxy-k8s-operator/blob/main/lib/charms/oauth2_proxy_k8s/v0/auth_proxy.py).
+
+Then complete setting up the proxy:
+
+```shell
+juju integrate your-charm traefik-public
+juju integrate oauth2-proxy-k8s your-charm:auth-proxy
 ```
 
 ### Identity Platform
-
-Charmed OAuth2 Proxy connects with the Identity Platform with the use of Hydra charmed
-operator:
-
-```shell
-juju integrate oauth2-proxy-k8s:oauth hydra
-```
 
 Identity Platform is a composable identity provider and identity broker system based on Juju.
 
@@ -60,9 +83,16 @@ It comes with a built-in identity and user management system, but is also able t
 to authenticate users and manage user attributes. Find out more about integrating it with providers like Google, Microsoft Entra ID
 or GitHub [here](https://charmhub.io/identity-platform/docs/how-to/integrate-external-identity-provider).
 
-Refer
-to [this](https://charmhub.io/topics/canonical-identity-platform/tutorials/e2e-tutorial)
-tutorial to learn how to deploy and configure the Identity Platform.
+Refer to [this](https://charmhub.io/topics/canonical-identity-platform/tutorials/e2e-tutorial) tutorial to learn how to deploy and configure the Identity Platform.
+
+Charmed OAuth2 Proxy connects with the Identity Platform with the use of Hydra charmed
+operator. To integrate it, run:
+
+```shell
+juju integrate oauth2-proxy-k8s:oauth hydra
+```
+
+Note that `oauth` requires `ingress` integration provided by Traefik Charmed Operator.
 
 ## Security
 
