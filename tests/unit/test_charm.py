@@ -8,7 +8,7 @@
 
 import json
 import logging
-from typing import Tuple
+from typing import Optional, Tuple
 from unittest.mock import MagicMock, Mock
 
 import pytest
@@ -67,6 +67,40 @@ def setup_oauth_relation(harness: Harness) -> int:
             **OAUTH_PROVIDER_INFO,
         },
     )
+    return relation_id
+
+
+def setup_auth_proxy_relation(harness: Harness, app_name: Optional[str] = "requirer") -> Tuple[int, str]:
+    """Set up auth-proxy relation."""
+    relation_id = harness.add_relation("auth-proxy", app_name)
+    harness.add_relation_unit(relation_id, f"{app_name}/0")
+    harness.update_relation_data(
+        relation_id,
+        app_name,
+        {
+            "protected_urls": '["https://example.com"]',
+            "allowed_endpoints": '["about/app"]',
+            "headers": '["X-Auth-Request-User", "X-Auth-Request-Groups"]',
+            "authenticated_emails": '["test@canonical.com", "test1@canonical.com"]',
+            "authenticated_email_domains": '["example.com"]',
+        },
+    )
+
+    return relation_id, app_name
+
+
+def setup_forward_auth_relation(harness: Harness) -> int:
+    """Set up forward-auth relation."""
+    relation_id = harness.add_relation("forward-auth", "requirer")
+    harness.add_relation_unit(relation_id, "requirer/0")
+    harness.update_relation_data(
+        relation_id,
+        "requirer",
+        {
+            "ingress_app_names": '["charmed-app"]',
+        },
+    )
+
     return relation_id
 
 
@@ -130,19 +164,84 @@ class TestPebbleReadyEvent:
         assert config["email_domains"] == "*"
         assert config["set_xauthrequest"] == "true"
 
+    def test_workload_version_set(self, harness: Harness) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        harness.handle_exec(
+            "oauth2-proxy", ["/bin/oauth2-proxy", "--version"], result="v7.8.1"
+        )
+        setup_peer_relation(harness)
+        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
 
-class TestConfigChangedEvent:
-    def test_authenticated_emails_list_config_changed(self, harness: Harness) -> None:
+        assert harness.get_workload_version() == "v7.8.1"
+
+
+class TestAuthProxyEvents:
+    def test_config_file_when_auth_proxy_config_provided(self, harness: Harness) -> None:
         harness.set_can_connect(WORKLOAD_CONTAINER, True)
         setup_peer_relation(harness)
-        harness.update_config({"authenticated-emails-list": "test@example.com,test1@example.com"})
+        setup_auth_proxy_relation(harness)
+        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+
+        container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
+        container_config = container.pull(path="/etc/config/oauth2-proxy/oauth2-proxy.cfg", encoding="utf-8")
+        config = toml.load(container_config)
+
+        assert config["authenticated_emails_file"] == "/etc/config/oauth2-proxy/access_list.cfg"
+        assert config["email_domains"] == ["example.com"]
+        assert config["skip_auth_routes"] == ["about/app"]
+        assert config["set_xauthrequest"] == "true"
+
+    def test_authenticated_emails_file_created_when_auth_proxy_config_provided(self, harness: Harness) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        setup_peer_relation(harness)
+        setup_auth_proxy_relation(harness)
+        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
 
         container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
         assert container.pull(path="/etc/config/oauth2-proxy/access_list.cfg", encoding="utf-8")
 
-        container_config = container.pull(path="/etc/config/oauth2-proxy/oauth2-proxy.cfg", encoding="utf-8")
-        config = toml.load(container_config)
-        assert config["authenticated_emails_file"] == "/etc/config/oauth2-proxy/access_list.cfg"
+    def test_forward_auth_updated_when_auth_proxy_set(self, harness: Harness, mocked_oauth2_proxy_is_running: MagicMock, mocked_forward_auth_update: MagicMock) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        setup_peer_relation(harness)
+        setup_auth_proxy_relation(harness)
+        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+
+        mocked_forward_auth_update.assert_called()
+
+    def test_auth_proxy_relation_departed(self, harness: Harness, mocked_forward_auth_update: MagicMock) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        setup_peer_relation(harness)
+        relation_id, _ = setup_auth_proxy_relation(harness)
+        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+        harness.remove_relation(relation_id)
+
+        mocked_forward_auth_update.assert_called()
+
+
+class TestForwardAuthEvents:
+    def test_forward_auth_set(self, harness: Harness) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        setup_peer_relation(harness)
+        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+        relation_id = setup_forward_auth_relation(harness)
+
+        app_data = harness.get_relation_data(relation_id, harness.charm.app)
+        assert app_data == {
+            "app_names": '[]',
+            "decisions_address": "http://oauth2-proxy-k8s.testing.svc.cluster.local:4180",
+        }
+
+        assert isinstance(harness.charm.unit.status, ActiveStatus)
+
+    def test_forward_auth_integration_removed(self, harness: Harness, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.INFO)
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+
+        relation_id = setup_forward_auth_relation(harness)
+        harness.remove_relation(relation_id)
+
+        assert "The proxy was unset" in caplog.text
+        assert isinstance(harness.charm.unit.status, ActiveStatus)
 
 
 class TestUpdateStatusEvent:
@@ -171,7 +270,7 @@ class TestUpdateStatusEvent:
 
 
 class TestIngressIntegrationEvents:
-    def test_ingress_relation_created(self, harness: Harness) -> None:
+    def test_ingress_relation_created(self, harness: Harness, mocked_cookie_encryption_key: MagicMock) -> None:
         harness.set_can_connect(WORKLOAD_CONTAINER, True)
 
         relation_id, url = setup_ingress_relation(harness)
@@ -185,15 +284,14 @@ class TestIngressIntegrationEvents:
             "strip-prefix": json.dumps(True),
         }
 
-    def test_ingress_relation_revoked(self, harness: Harness, caplog: pytest.LogCaptureFixture) -> None:
+    def test_ingress_relation_revoked(self, harness: Harness, mocked_cookie_encryption_key: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
         caplog.set_level(logging.INFO)
         harness.set_can_connect(WORKLOAD_CONTAINER, True)
 
         relation_id, _ = setup_ingress_relation(harness)
-        caplog.clear()
         harness.remove_relation(relation_id)
 
-        assert "This app no longer has ingress" in caplog.record_tuples[3]
+        assert "This app no longer has ingress" in caplog.text
 
 
 class TestOAuthIntegrationEvents:
