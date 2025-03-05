@@ -1,4 +1,6 @@
 http_address="0.0.0.0:4180"
+ssl_insecure_skip_verify="true"
+redirect_url="{{ redirect_url }}"
 
 client_secret="{{ client_secret }}"
 client_id="{{ client_id }}"
@@ -10,17 +12,22 @@ scope="{{ scopes }}"
 skip_provider_button="true"
 {%- endif %}
 
+{%- if authenticated_emails_file or authenticated_email_domains %}
 {%- if authenticated_emails_file %}
 authenticated_emails_file="{{ authenticated_emails_file }}"
+{%- endif %}
+{%- if authenticated_email_domains %}
+email_domains={{ authenticated_email_domains }}
+{%- endif %}
 {%- else %}
 email_domains="*"
 {%- endif %}
 set_xauthrequest="true"
-# TODO: Fetch endpoints that are allowed to bypass authentication
-# skip_auth_routes="GET=^/anything/allowed"
+{%- if skip_auth_routes %}
+skip_auth_routes={{ skip_auth_routes }}
+{%- endif %}
 
-# TODO: Update when forward-auth integration in place
 # Mandatory option when using oauth2-proxy with traefik
-# reverse_proxy="true"
+reverse_proxy="true"
 # Required for traefik with ForwardAuth and static upstream configuration
-# upstreams="static://202"
+upstreams="static://202"

@@ -39,22 +39,15 @@ requires:
     interface: oauth
     limit: 1
 
+provides:
+  auth-proxy:
+    interface: auth_proxy
+  forward-auth:
+    interface: forward_auth
+
 peers:
   oauth2-proxy:
     interface: oauth2_proxy_peers
-
-# This config section defines charm config options, and populates the Configure
-# tab on Charmhub.
-# More information on this section at https://juju.is/docs/sdk/charmcraft-yaml#heading--config
-# General configuration documentation: https://juju.is/docs/sdk/config
-config:
-  options:
-
-    authenticated-emails-list:
-      description: |
-          Comma-separated list of users to allow to authenticate to the service.
-      default: ""
-      type: string
 
 containers:
   oauth2-proxy:
