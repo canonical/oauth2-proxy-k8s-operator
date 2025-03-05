@@ -1,6 +1,6 @@
 httpx==0.28.1
 juju==3.6.1.0
-protobuf~=5.29.0
+protobuf~=6.30.0
 pytest
 pytest-operator==0.40.0
 requests
