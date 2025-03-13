@@ -1,6 +1,15 @@
 http_address="0.0.0.0:4180"
+{%- if provider_ca_files %}
+provider_ca_files={{ provider_ca_files }}
+{%- else %}
 ssl_insecure_skip_verify="true"
+{%- endif %}
 redirect_url="{{ redirect_url }}"
+
+{%- if tls_config %}
+tls_cert_file="/usr/local/share/ca-certificates/server.crt"
+tls_key_file="/etc/ssl/private/server.key"
+{%- endif %}
 
 client_secret="{{ client_secret }}"
 client_id="{{ client_id }}"
@@ -31,3 +40,4 @@ skip_auth_routes={{ skip_auth_routes }}
 reverse_proxy="true"
 # Required for traefik with ForwardAuth and static upstream configuration
 upstreams="static://202"
+# upstreams="http://127.0.0.1:8080/"

@@ -9,6 +9,10 @@ import os
 import secrets
 from typing import Optional
 
+from charms.certificate_transfer_interface.v1.certificate_transfer import (
+    CertificatesAvailableEvent,
+    CertificatesRemovedEvent,
+)
 from charms.hydra.v0.oauth import ClientConfig as OauthClientConfig
 from charms.hydra.v0.oauth import OAuthInfoChangedEvent, OAuthRequirer
 from charms.oauth2_proxy_k8s.v0.auth_proxy import (
@@ -23,6 +27,7 @@ from charms.oauth2_proxy_k8s.v0.forward_auth import (
     ForwardAuthRelationRemovedEvent,
     InvalidForwardAuthConfigEvent,
 )
+from charms.tls_certificates_interface.v4.tls_certificates import CertificateAvailableEvent
 from charms.traefik_k8s.v2.ingress import (
     IngressPerAppReadyEvent,
     IngressPerAppRequirer,
@@ -45,6 +50,7 @@ from cli import CommandLine
 from constants import (
     ACCESS_LIST_EMAILS_PATH,
     AUTH_PROXY_RELATION_NAME,
+    CERT_PATHS_KEY,
     CONFIG_FILE_PATH,
     COOKIES_KEY,
     FORWARD_AUTH_RELATION_NAME,
@@ -52,13 +58,21 @@ from constants import (
     HTTPS_PROXY,
     NO_PROXY,
     OAUTH2_PROXY_API_PORT,
+    OAUTH2_PROXY_HTTPS_PORT,
     OAUTH_GRANT_TYPES,
     OAUTH_SCOPES,
     PEER,
+    SERVER_CERT_PATH,
+    TRUSTED_CA_TEMPLATE,
     WORKLOAD_CONTAINER,
     WORKLOAD_SERVICE,
 )
-from integrations import AuthProxyIntegrationData
+from exceptions import CertificatesError
+from integrations import (
+    AuthProxyIntegrationData,
+    CertificatesIntegration,
+    TrustedCertificatesTransferIntegration,
+)
 from log import log_event_handler
 
 logger = logging.getLogger(__name__)
@@ -73,6 +87,8 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         self._container = self.unit.get_container(WORKLOAD_CONTAINER)
         self.cli = CommandLine(self._container)
 
+        self._sans_dns = f"{self.app.name}.{self.model.name}.svc.cluster.local"
+
         self.ingress = IngressPerAppRequirer(
             self,
             relation_name="ingress",
@@ -80,6 +96,9 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             strip_prefix=True,
             redirect_https=False,
         )
+        self.trusted_cert_transfer = TrustedCertificatesTransferIntegration(self)
+        self.certificates = CertificatesIntegration(self)
+
         self.oauth = OAuthRequirer(self, self._oauth_client_config)
 
         self.auth_proxy = AuthProxyProvider(self, relation_name=AUTH_PROXY_RELATION_NAME)
@@ -99,6 +118,20 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         # ingress integration observations
         self.framework.observe(self.ingress.on.ready, self._on_ingress_ready)
         self.framework.observe(self.ingress.on.revoked, self._on_ingress_revoked)
+
+        # certificate integrations observations
+        self.framework.observe(
+            self.trusted_cert_transfer.cert_transfer_requires.on.certificate_set_updated,
+            self._on_trusted_certificates_available,
+        )
+        self.framework.observe(
+            self.trusted_cert_transfer.cert_transfer_requires.on.certificates_removed,
+            self._on_trusted_certificates_removed,
+        )
+
+        self.framework.observe(
+            self.certificates.cert_requirer.on.certificate_available, self._on_certificate_available
+        )
 
         # forward-auth integration observations
         self.framework.observe(
@@ -125,13 +158,26 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         return self.model.get_relation(PEER)
 
     @property
+    def _tls_ready(self) -> bool:
+        return self.certificates.certs_ready() and self._container.exists(SERVER_CERT_PATH)
+
+    @property
+    def _internal_url(self) -> str:
+        """Retrieve the internal url of the application."""
+        internal_url = (
+            f"https://{self._sans_dns}:{OAUTH2_PROXY_HTTPS_PORT}" if self._tls_ready
+            else f"http://{self._sans_dns}:{OAUTH2_PROXY_API_PORT}"
+        )
+        return internal_url
+
+    @property
     def _public_url(self) -> str:
         """Retrieve the url of the application."""
-        public_endpoint = (
+        public_url = (
             self.ingress.url
-            or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{OAUTH2_PROXY_API_PORT}"
+            or self._internal_url
         )
-        return public_endpoint
+        return public_url
 
     @property
     def _redirect_url(self) -> str:
@@ -145,6 +191,13 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         return self._peers.data[self.app].get(COOKIES_KEY, None)
 
     @property
+    def _trusted_cert_paths(self) -> Optional[str]:
+        """Retrieve trusted certificate paths from the peer data bucket."""
+        if not self._peers:
+            return None
+        return self._peers.data[self.app].get(CERT_PATHS_KEY, None)
+
+    @property
     def _oauth_client_config(self) -> OauthClientConfig:
         """OAuth client configuration."""
         return OauthClientConfig(
@@ -156,9 +209,8 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
     @property
     def _forward_auth_config(self) -> ForwardAuthConfig:
         auth_proxy_data = AuthProxyIntegrationData.load(self.auth_proxy)
-        oauth2_proxy_url = f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{OAUTH2_PROXY_API_PORT}"
         return ForwardAuthConfig(
-            decisions_address=oauth2_proxy_url,
+            decisions_address=self._internal_url,
             app_names=auth_proxy_data.app_names,
             headers=auth_proxy_data.headers,
         )
@@ -197,7 +249,7 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
                 "up": {
                     "override": "replace",
                     "period": "10s",
-                    "http": {"url": f"http://localhost:{OAUTH2_PROXY_API_PORT}/ready"},
+                    "http": {"url": f"{self._internal_url}/ready"},
                 }
             },
         }
@@ -244,6 +296,8 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             scopes=OAUTH_SCOPES,
             redirect_url=self._redirect_url,
             skip_auth_routes=auth_proxy_data.allowed_endpoints,
+            provider_ca_files=self._trusted_cert_paths,
+            tls_config=self._tls_ready,
         )
         return rendered
 
@@ -259,6 +313,8 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             event: The event triggered when Pebble is ready for a workload.
         """
         self.model.unit.open_port(protocol="tcp", port=OAUTH2_PROXY_API_PORT)
+        self.model.unit.open_port(protocol="tcp", port=OAUTH2_PROXY_HTTPS_PORT)
+
         self._handle_status_update_config(event)
 
         if version := self.cli.get_oauth2_proxy_service_version():
@@ -287,6 +343,22 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         if self.unit.is_leader():
             logger.info("This app no longer has ingress")
             self.oauth.update_client_config(client_config=self._oauth_client_config)
+
+    @log_event_handler(logger)
+    def _on_certificate_available(self, event: CertificateAvailableEvent) -> None:
+        self._handle_status_update_config(event)
+        self.forward_auth.update_forward_auth_config(self._forward_auth_config)
+
+    @log_event_handler(logger)
+    def _on_trusted_certificates_available(self, event: CertificatesAvailableEvent) -> None:
+        self._handle_status_update_config(event)
+
+    @log_event_handler(logger)
+    def _on_trusted_certificates_removed(self, event: CertificatesRemovedEvent) -> None:
+        # All certificates received from the relation are in separate files marked by the relation id
+        cert_path = TRUSTED_CA_TEMPLATE.substitute(rel_id=event.relation_id)
+        self._container.remove_path(cert_path, recursive=True)
+        self._handle_status_update_config(event)
 
     @log_event_handler(logger)
     def _on_update_status(self, event: UpdateStatusEvent) -> None:
@@ -374,6 +446,16 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             users = "\n".join(emails)
             self._container.push(ACCESS_LIST_EMAILS_PATH, users, make_dirs=True)
 
+        self.trusted_cert_transfer.update_trusted_ca_certs()
+
+        try:
+            self.certificates.update_certificates()
+        except CertificatesError:
+            self.unit.status = BlockedStatus(
+                "Failed to update the TLS certificates, please check the logs"
+            )
+            return
+
         config = self._render_config_file()
         self._container.push(CONFIG_FILE_PATH, config, make_dirs=True)
 
@@ -383,9 +465,7 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             self._container.restart(WORKLOAD_CONTAINER)
         except ChangeError as err:
             logger.error(str(err))
-            self.unit.status = BlockedStatus(
-                "Failed to restart the container, please consult the logs"
-            )
+            self.unit.status = BlockedStatus("Failed to restart the container, please consult the logs")
             return
 
         self.unit.status = ActiveStatus()

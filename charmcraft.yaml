@@ -29,7 +29,14 @@ parts:
   charm:
     charm-binary-python-packages:
       - jsonschema
+      - cryptography
       - pydantic
+    build-packages:
+      - cargo
+      - libffi-dev
+      - libssl-dev
+      - pkg-config
+      - rustc
 
 # Metadata
 requires:
@@ -37,6 +44,12 @@ requires:
     interface: ingress
   oauth:
     interface: oauth
+    limit: 1
+  certificates:
+    interface: tls-certificates
+    limit: 1
+  receive-ca-cert:
+    interface: certificate_transfer
     limit: 1
 
 provides:

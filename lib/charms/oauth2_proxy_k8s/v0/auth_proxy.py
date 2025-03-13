@@ -500,4 +500,3 @@ class AuthProxyRequirer(AuthProxyRelation):
     ) -> None:
         """Update the auth proxy config stored in the object."""
         self._update_relation_data(auth_proxy_config, relation_id=relation_id)
-
