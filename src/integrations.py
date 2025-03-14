@@ -10,6 +10,7 @@ from typing import List, Optional
 from urllib.parse import urlparse
 
 from charms.certificate_transfer_interface.v1.certificate_transfer import (
+    CertificateTransferProvides,
     CertificateTransferRequires,
 )
 from charms.oauth2_proxy_k8s.v0.auth_proxy import AuthProxyProvider
@@ -27,6 +28,7 @@ from constants import (
     CA_CERT_PATH,
     CERT_PATHS_KEY,
     CERTIFICATES_INTEGRATION_NAME,
+    CERTIFICATES_TRANSFER_PROVIDER_INTEGRATION_NAME,
     SERVER_CERT_PATH,
     SERVER_KEY_PATH,
     SSL_CERTIFICATE,
@@ -62,6 +64,13 @@ class AuthProxyIntegrationData:
             authenticated_emails=authenticated_emails,
             authenticated_email_domains=authenticated_email_domains,
         )
+
+
+@dataclass
+class CertificateData:
+    ca_cert: Optional[str] = None
+    ca_chain: Optional[list[str]] = None
+    cert: Optional[str] = None
 
 
 class CertificatesIntegration:
@@ -112,9 +121,21 @@ class CertificatesIntegration:
         return str(self._certs.certificate) if self._certs else None
 
     @property
+    def _ca_chain(self) -> Optional[list[str]]:
+        return [str(chain) for chain in self._certs.chain] if self._certs else None
+
+    @property
     def _certs(self) -> Optional[ProviderCertificate]:
         cert, *_ = self.cert_requirer.get_assigned_certificate(self.csr_attributes)
         return cert
+
+    @property
+    def cert_data(self) -> CertificateData:
+        return CertificateData(
+            ca_cert=self._ca_cert,
+            ca_chain=self._ca_chain,
+            cert=self._server_cert,
+        )
 
     def update_certificates(self) -> None:
         if not self._charm.model.get_relation(CERTIFICATES_INTEGRATION_NAME):
@@ -175,6 +196,7 @@ class TrustedCertificatesTransferIntegration:
         self._container = charm._container
         self._peers = charm._peers
         self.cert_transfer_requires = CertificateTransferRequires(charm, relationship_name="receive-ca-cert")
+        self.cert_transfer_provides = CertificateTransferProvides(charm, relationship_name="send-ca-cert")
 
     def update_trusted_ca_certs(self) -> None:
         """Receive trusted certificates from the certificate_transfer integration.
@@ -203,3 +225,26 @@ class TrustedCertificatesTransferIntegration:
         self._peers.data[self._charm.app][CERT_PATHS_KEY] = str(certs)
 
         subprocess.run(["update-ca-certificates", "--fresh"])
+
+    def transfer_certificates(
+            self, /, data: CertificateData, relation_id: Optional[int] = None
+    ) -> None:
+        if not (
+                relations := self._charm.model.relations.get(CERTIFICATES_TRANSFER_PROVIDER_INTEGRATION_NAME)
+        ):
+            return
+
+        if relation_id is not None:
+            relations = [relation for relation in relations if relation.id == relation_id]
+
+        ca_cert, ca_chain, certificate = data.ca_cert, data.ca_chain, data.cert
+        if not all((ca_cert, ca_chain, certificate)):
+            for relation in relations:
+                self.cert_transfer_provides.remove_certificate(relation_id=relation.id)
+            return
+
+        for relation in relations:
+            self.cert_transfer_provides.add_certificates(
+                certificates=self._container.pull(CA_CERT_PATH).read(),
+                relation_id=relation.id,
+            )

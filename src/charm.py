@@ -35,7 +35,7 @@ from charms.traefik_k8s.v2.ingress import (
 )
 from jinja2 import Template
 from ops import main, pebble
-from ops.charm import CharmBase, HookEvent, PebbleReadyEvent, UpdateStatusEvent
+from ops.charm import CharmBase, HookEvent, PebbleReadyEvent, RelationJoinedEvent, UpdateStatusEvent
 from ops.model import (
     ActiveStatus,
     BlockedStatus,
@@ -51,6 +51,7 @@ from constants import (
     ACCESS_LIST_EMAILS_PATH,
     AUTH_PROXY_RELATION_NAME,
     CERT_PATHS_KEY,
+    CERTIFICATES_TRANSFER_PROVIDER_INTEGRATION_NAME,
     CONFIG_FILE_PATH,
     COOKIES_KEY,
     FORWARD_AUTH_RELATION_NAME,
@@ -131,6 +132,11 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
 
         self.framework.observe(
             self.certificates.cert_requirer.on.certificate_available, self._on_certificate_available
+        )
+
+        self.framework.observe(
+            self.on[CERTIFICATES_TRANSFER_PROVIDER_INTEGRATION_NAME].relation_joined,
+            self._on_certificates_transfer_relation_joined,
         )
 
         # forward-auth integration observations
@@ -347,7 +353,21 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
     @log_event_handler(logger)
     def _on_certificate_available(self, event: CertificateAvailableEvent) -> None:
         self._handle_status_update_config(event)
+        self.trusted_cert_transfer.transfer_certificates(
+            self.certificates.cert_data,
+        )
         self.forward_auth.update_forward_auth_config(self._forward_auth_config)
+
+    @log_event_handler(logger)
+    def _on_certificates_transfer_relation_joined(self, event: RelationJoinedEvent) -> None:
+        if not self.certificates.certs_ready():
+            logger.info("Certificates relation is not ready, deferring the event")
+            event.defer()
+            return
+
+        self.trusted_cert_transfer.transfer_certificates(
+            self.certificates.cert_data, event.relation.id
+        )
 
     @log_event_handler(logger)
     def _on_trusted_certificates_available(self, event: CertificatesAvailableEvent) -> None:

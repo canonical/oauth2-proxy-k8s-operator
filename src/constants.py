@@ -30,6 +30,7 @@ PEER = "oauth2-proxy"
 # Template for storing trusted certificate in a file
 TRUSTED_CA_TEMPLATE = string.Template("/usr/share/ca-certificates/trusted-ca-cert-$rel_id-ca.crt")
 CERT_PATHS_KEY = "provider_ca_files"
+CERTIFICATES_TRANSFER_PROVIDER_INTEGRATION_NAME = "send-ca-cert"
 
 CERTIFICATES_INTEGRATION_NAME = "certificates"
 

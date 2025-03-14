@@ -57,6 +57,10 @@ provides:
     interface: auth_proxy
   forward-auth:
     interface: forward_auth
+  send-ca-cert:
+    description: |
+      Transfer certificates to client charmed operators.
+    interface: certificate_transfer
 
 peers:
   oauth2-proxy:
