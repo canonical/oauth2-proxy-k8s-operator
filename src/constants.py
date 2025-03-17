@@ -3,6 +3,8 @@
 
 """Charmed oauth2-proxy's constant variables."""
 
+from pathlib import Path
+
 # Application constants
 WORKLOAD_CONTAINER = "oauth2-proxy"
 WORKLOAD_SERVICE = "oauth2-proxy"
@@ -22,3 +24,7 @@ AUTH_PROXY_RELATION_NAME = "auth-proxy"
 FORWARD_AUTH_RELATION_NAME = "forward-auth"
 
 PEER = "oauth2-proxy"
+
+CERTIFICATES_PATH = Path("/etc/ssl/certs")
+CERTIFICATES_FILE = Path(CERTIFICATES_PATH / "ca-certificates.crt")
+LOCAL_CA_BUNDLE_PATH = Path("/usr/local/share/ca-certificates/ca-certificates.crt")
