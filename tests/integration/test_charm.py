@@ -22,6 +22,7 @@ METADATA = yaml.safe_load(Path("./charmcraft.yaml").read_text())
 APP_NAME = METADATA["name"]
 IMAGE_PATH = METADATA["resources"]["oauth2-proxy-image"]["upstream-source"]
 TRAEFIK = "traefik-k8s"
+CERTIFICATES_PROVIDER = "self-signed-certificates"
 AUTH_PROXY_REQUIRER = "auth-proxy-requirer"
 
 
@@ -82,6 +83,25 @@ async def test_ingress_relation(ops_test: OpsTest) -> None:
 
     await ops_test.model.wait_for_idle(
         apps=[APP_NAME, TRAEFIK],
+        status="active",
+        raise_on_blocked=False,
+        timeout=1000,
+    )
+
+
+@pytest.mark.skip_if_deployed
+@pytest.mark.abort_on_fail
+async def test_receive_certs_relation(ops_test: OpsTest) -> None:
+    await ops_test.model.deploy(
+        CERTIFICATES_PROVIDER,
+        channel="latest/stable",
+        trust=True,
+    )
+
+    await ops_test.model.integrate(f"{APP_NAME}:receive-ca-cert", CERTIFICATES_PROVIDER)
+
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME, CERTIFICATES_PROVIDER],
         status="active",
         raise_on_blocked=False,
         timeout=1000,

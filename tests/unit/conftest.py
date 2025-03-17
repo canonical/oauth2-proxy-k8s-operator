@@ -40,3 +40,10 @@ def mocked_oauth2_proxy_is_running(mocker: MockerFixture) -> MagicMock:
 @pytest.fixture
 def mocked_forward_auth_update(mocker: MockerFixture) -> MagicMock:
     return mocker.patch("charms.oauth2_proxy_k8s.v0.forward_auth.ForwardAuthProvider.update_forward_auth_config")
+
+
+@pytest.fixture(autouse=True)
+def mocked_push_ca_certs(mocker: MockerFixture) -> MagicMock:
+    return mocker.patch(
+        "integrations.TrustedCertificatesTransferIntegration._push_ca_certs", return_value=None
+    )
