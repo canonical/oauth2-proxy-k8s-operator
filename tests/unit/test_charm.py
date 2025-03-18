@@ -183,6 +183,19 @@ class TestPebbleReadyEvent:
         assert harness.get_workload_version() == "v7.8.1"
 
 
+class TestConfigChangedEvent:
+    def test_oauth2_proxy_config_with_dev_flag(self, harness: Harness) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        setup_peer_relation(harness)
+        harness.update_config({"dev": True})
+        container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
+
+        container_config = container.pull(path="/etc/config/oauth2-proxy/oauth2-proxy.cfg", encoding="utf-8")
+
+        config = toml.load(container_config)
+        assert config["ssl_insecure_skip_verify"] == "true"
+
+
 class TestAuthProxyEvents:
     def test_config_file_when_auth_proxy_config_provided(self, harness: Harness) -> None:
         harness.set_can_connect(WORKLOAD_CONTAINER, True)
