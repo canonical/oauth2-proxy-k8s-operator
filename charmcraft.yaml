@@ -44,12 +44,15 @@ config:
 requires:
   ingress:
     interface: ingress
+    optional: true
   oauth:
     interface: oauth
     limit: 1
+    optional: true
   receive-ca-cert:
     interface: certificate_transfer
     limit: 1
+    optional: true
 
 provides:
   auth-proxy:
