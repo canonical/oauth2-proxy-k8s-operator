@@ -9,6 +9,10 @@ import os
 import secrets
 from typing import Optional
 
+from charms.certificate_transfer_interface.v1.certificate_transfer import (
+    CertificatesAvailableEvent,
+    CertificatesRemovedEvent,
+)
 from charms.hydra.v0.oauth import ClientConfig as OauthClientConfig
 from charms.hydra.v0.oauth import OAuthInfoChangedEvent, OAuthRequirer
 from charms.oauth2_proxy_k8s.v0.auth_proxy import (
@@ -30,7 +34,7 @@ from charms.traefik_k8s.v2.ingress import (
 )
 from jinja2 import Template
 from ops import main, pebble
-from ops.charm import CharmBase, HookEvent, PebbleReadyEvent, UpdateStatusEvent
+from ops.charm import CharmBase, ConfigChangedEvent, HookEvent, PebbleReadyEvent, UpdateStatusEvent
 from ops.model import (
     ActiveStatus,
     BlockedStatus,
@@ -58,7 +62,7 @@ from constants import (
     WORKLOAD_CONTAINER,
     WORKLOAD_SERVICE,
 )
-from integrations import AuthProxyIntegrationData
+from integrations import AuthProxyIntegrationData, TrustedCertificatesTransferIntegration
 from log import log_event_handler
 
 logger = logging.getLogger(__name__)
@@ -80,6 +84,9 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             strip_prefix=True,
             redirect_https=False,
         )
+
+        self.trusted_cert_transfer = TrustedCertificatesTransferIntegration(self)
+
         self.oauth = OAuthRequirer(self, self._oauth_client_config)
 
         self.auth_proxy = AuthProxyProvider(self, relation_name=AUTH_PROXY_RELATION_NAME)
@@ -90,6 +97,7 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         )
 
         self.framework.observe(self.on[WORKLOAD_CONTAINER].pebble_ready, self._on_pebble_ready)
+        self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.update_status, self._on_update_status)
 
         # oauth integration observations
@@ -99,6 +107,16 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         # ingress integration observations
         self.framework.observe(self.ingress.on.ready, self._on_ingress_ready)
         self.framework.observe(self.ingress.on.revoked, self._on_ingress_revoked)
+
+        # certificate integrations observations
+        self.framework.observe(
+            self.trusted_cert_transfer.cert_transfer_requires.on.certificate_set_updated,
+            self._on_trusted_certificates_available,
+        )
+        self.framework.observe(
+            self.trusted_cert_transfer.cert_transfer_requires.on.certificates_removed,
+            self._on_trusted_certificates_removed,
+        )
 
         # forward-auth integration observations
         self.framework.observe(
@@ -244,6 +262,7 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             scopes=OAUTH_SCOPES,
             redirect_url=self._redirect_url,
             skip_auth_routes=auth_proxy_data.allowed_endpoints,
+            dev=self.config["dev"],
         )
         return rendered
 
@@ -287,6 +306,19 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         if self.unit.is_leader():
             logger.info("This app no longer has ingress")
             self.oauth.update_client_config(client_config=self._oauth_client_config)
+
+    @log_event_handler(logger)
+    def _on_trusted_certificates_available(self, event: CertificatesAvailableEvent) -> None:
+        self._handle_status_update_config(event)
+
+    @log_event_handler(logger)
+    def _on_trusted_certificates_removed(self, event: CertificatesRemovedEvent) -> None:
+        self._handle_status_update_config(event)
+
+    @log_event_handler(logger)
+    def _on_config_changed(self, event: ConfigChangedEvent) -> None:
+        """Handle config-changed event."""
+        self._handle_status_update_config(event)
 
     @log_event_handler(logger)
     def _on_update_status(self, event: UpdateStatusEvent) -> None:
@@ -374,6 +406,8 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             users = "\n".join(emails)
             self._container.push(ACCESS_LIST_EMAILS_PATH, users, make_dirs=True)
 
+        self.trusted_cert_transfer.update_trusted_ca_certs()
+
         config = self._render_config_file()
         self._container.push(CONFIG_FILE_PATH, config, make_dirs=True)
 
@@ -383,9 +417,7 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             self._container.restart(WORKLOAD_CONTAINER)
         except ChangeError as err:
             logger.error(str(err))
-            self.unit.status = BlockedStatus(
-                "Failed to restart the container, please consult the logs"
-            )
+            self.unit.status = BlockedStatus("Failed to restart the container, please consult the logs")
             return
 
         self.unit.status = ActiveStatus()

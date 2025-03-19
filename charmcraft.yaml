@@ -31,12 +31,24 @@ parts:
       - jsonschema
       - pydantic
 
+config:
+  options:
+    dev:
+      description: |
+        Run OAuth2 Proxy in dev mode. If enabled, it will skip validation of certificates presented when using HTTPS providers.
+        This should only be used for development purposes.
+      type: boolean
+      default: False
+
 # Metadata
 requires:
   ingress:
     interface: ingress
   oauth:
     interface: oauth
+    limit: 1
+  receive-ca-cert:
+    interface: certificate_transfer
     limit: 1
 
 provides:

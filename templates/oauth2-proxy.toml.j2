@@ -1,5 +1,7 @@
 http_address="0.0.0.0:4180"
+{%- if dev %}
 ssl_insecure_skip_verify="true"
+{%- endif %}
 redirect_url="{{ redirect_url }}"
 
 client_secret="{{ client_secret }}"

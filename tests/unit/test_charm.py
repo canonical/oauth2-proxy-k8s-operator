@@ -52,6 +52,14 @@ def setup_ingress_relation(harness: Harness) -> Tuple[int, str]:
     return relation_id, url
 
 
+def setup_certificates_relation(harness: Harness) -> int:
+    """Set up receive-ca-certificates relation."""
+    relation_id = harness.add_relation("receive-ca-cert", "certificates-provider")
+    harness.add_relation_unit(relation_id, "certificates-provider/0")
+
+    return relation_id
+
+
 def setup_oauth_relation(harness: Harness) -> int:
     """Set up oauth relation."""
     relation_id = harness.add_relation("oauth", "hydra")
@@ -173,6 +181,19 @@ class TestPebbleReadyEvent:
         harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
 
         assert harness.get_workload_version() == "v7.8.1"
+
+
+class TestConfigChangedEvent:
+    def test_oauth2_proxy_config_with_dev_flag(self, harness: Harness) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        setup_peer_relation(harness)
+        harness.update_config({"dev": True})
+        container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
+
+        container_config = container.pull(path="/etc/config/oauth2-proxy/oauth2-proxy.cfg", encoding="utf-8")
+
+        config = toml.load(container_config)
+        assert config["ssl_insecure_skip_verify"] == "true"
 
 
 class TestAuthProxyEvents:
@@ -321,3 +342,23 @@ class TestOAuthIntegrationEvents:
         assert config["client_id"] == OAUTH_CLIENT_ID
         assert config["client_secret"] == OAUTH_CLIENT_SECRET
         assert config["oidc_issuer_url"] == "https://example.oidc.com"
+
+
+class TestTrustedCertificatesTransferIntegration:
+    def test_warning_when_no_certs_transfer_integration(self, harness: Harness, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.WARNING)
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        setup_peer_relation(harness)
+        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+
+        assert "Missing certificate_transfer integration" in caplog.text
+
+    def test_trusted_certs_update_called(self, harness: Harness) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        harness.charm.trusted_cert_transfer.update_trusted_ca_certs = mocked_update = Mock(return_value=None)
+
+        setup_peer_relation(harness)
+        setup_certificates_relation(harness)
+        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+
+        mocked_update.assert_called_once()
