@@ -102,6 +102,7 @@ from ops import (
     Relation,
     RelationBrokenEvent,
     RelationChangedEvent,
+    RelationCreatedEvent,
 )
 from ops.charm import CharmBase
 from ops.framework import Object
@@ -115,7 +116,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 3
 
 logger = logging.getLogger(__name__)
 
@@ -194,17 +195,30 @@ class DatabagModel(BaseModel):
             )
             return databag
 
-        dct = self.model_dump(mode="json", by_alias=True, exclude_defaults=True)
+        dct = self.model_dump(mode="json", by_alias=True, exclude_defaults=False)
         databag.update({k: json.dumps(v) for k, v in dct.items()})
         return databag
 
 
 class ProviderApplicationData(DatabagModel):
-    """App databag model."""
+    """Provider App databag model."""
 
     certificates: Set[str] = Field(
         description="The set of certificates that will be transferred to a requirer",
         default=set(),
+    )
+    version: int = Field(
+        description="Version of the interface used in this databag",
+        default=1,
+    )
+
+
+class RequirerApplicationData(DatabagModel):
+    """Requirer App databag model."""
+
+    version: int = Field(
+        description="Version of the interface supported by this requirer",
+        default=1,
     )
 
 
@@ -385,6 +399,9 @@ class CertificateTransferRequires(Object):
         self.framework.observe(
             charm.on[relationship_name].relation_broken, self._on_relation_broken
         )
+        self.framework.observe(
+            charm.on[relationship_name].relation_created, self._on_relation_created
+        )
 
     def _on_relation_changed(self, event: RelationChangedEvent) -> None:
         """Emit certificate set updated event.
@@ -411,6 +428,18 @@ class CertificateTransferRequires(Object):
             None
         """
         self.on.certificates_removed.emit(relation_id=event.relation.id)
+
+    def _on_relation_created(self, event: RelationCreatedEvent) -> None:
+        """Handle relation created event.
+
+        Args:
+            event: Juju event
+
+        Returns:
+            None
+        """
+        databag = event.relation.data[self.model.app]
+        RequirerApplicationData().dump(databag, False)
 
     def get_all_certificates(self, relation_id: Optional[int] = None) -> Set[str]:
         """Get transferred certificates.
