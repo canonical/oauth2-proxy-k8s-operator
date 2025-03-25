@@ -8,9 +8,14 @@ on:
      - "main"
      - "release-**"
      - "track/**"
+     paths-ignore:
+     - 'terraform/**'
    pull_request:
      branches:
      - "*"
+     paths-ignore:
+     - 'terraform/**'
+
 
 jobs:
   lint:
