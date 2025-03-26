@@ -27,7 +27,7 @@ on:
 jobs:
   publish:
     name: Publish Charm
-    uses: canonical/identity-team/.github/workflows/charm-publish.yaml@6682f5f0364dfd050360059e2d68d21dfe7316cc # v1.7.2
+    uses: canonical/identity-team/.github/workflows/charm-publish.yaml@af4e4e5c955eab17ead2e279222b98d320c22fd7 # v1.7.3
     with:
       destination_channel: ${{ inputs.destination_channel}}
       source_branch: ${{ inputs.source_branch}}
