@@ -1,0 +1,44 @@
+name: TIOBE Quality Checks
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron:  '0 7 1 * *'  # Runs monthly on the 1st at 07:00 UTC
+
+jobs:
+  TICS:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install TIOBE dependencies
+        run: |
+          python -m pip install pylint flake8
+
+      - name: Install project dependencies
+        run: |
+          find . -name '*requirements.txt' -exec echo Installing {} \; -exec pip install -r {} \;
+          python -m pip install tox
+
+      - name: Run coverage tests
+        run: |
+          tox -e unit
+          mkdir coverage
+          mv coverage.xml ./coverage/
+
+      - name: Set TIOBE project name
+        run: echo "PROJECT_NAME=$(basename "${{ github.repository }}")" >> $GITHUB_ENV
+
+      - name: Run TICS quality analysis
+        uses: tiobe/tics-github-action@v3
+        with:
+          mode: qserver
+          viewerUrl: https://canonical.tiobe.com/tiobeweb/TICS/api/cfg?name=default
+          ticsAuthToken: ${{ secrets.TICSAUTHTOKEN }}
+          project: ${{ env.PROJECT_NAME }}
+          installTics: true
+          filelist: .
+          recalc: ALL
