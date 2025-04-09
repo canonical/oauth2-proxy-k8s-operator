@@ -102,6 +102,7 @@ from ops import (
     Relation,
     RelationBrokenEvent,
     RelationChangedEvent,
+    RelationCreatedEvent,
 )
 from ops.charm import CharmBase
 from ops.framework import Object
@@ -115,7 +116,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 5
 
 logger = logging.getLogger(__name__)
 
@@ -194,17 +195,30 @@ class DatabagModel(BaseModel):
             )
             return databag
 
-        dct = self.model_dump(mode="json", by_alias=True, exclude_defaults=True)
+        dct = self.model_dump(mode="json", by_alias=True, exclude_defaults=False)
         databag.update({k: json.dumps(v) for k, v in dct.items()})
         return databag
 
 
 class ProviderApplicationData(DatabagModel):
-    """App databag model."""
+    """Provider App databag model."""
 
     certificates: Set[str] = Field(
         description="The set of certificates that will be transferred to a requirer",
         default=set(),
+    )
+    version: int = Field(
+        description="Version of the interface used in this databag",
+        default=1,
+    )
+
+
+class RequirerApplicationData(DatabagModel):
+    """Requirer App databag model."""
+
+    version: int = Field(
+        description="Version of the interface supported by this requirer",
+        default=1,
     )
 
 
@@ -229,7 +243,7 @@ class CertificateTransferProvides(Object):
             None
         """
         if not self.charm.unit.is_leader():
-            logger.error("Only the leader unit can add certificates to this relation")
+            logger.warning("Only the leader unit can add certificates to this relation")
             return
         relations = self._get_relevant_relations(relation_id)
         if not relations:
@@ -243,6 +257,31 @@ class CertificateTransferProvides(Object):
             existing_data = self._get_relation_data(relation)
             existing_data.update(certificates)
             self._set_relation_data(relation, existing_data)
+
+    def remove_all_certificates(self, relation_id: Optional[int] = None) -> None:
+        """Remove all certificates from relation data.
+
+        Removes all certificates from all relations if relation_id not given
+
+        Args:
+            relation_id (int): Relation ID
+
+        Returns:
+            None
+        """
+        if not self.charm.unit.is_leader():
+            logger.warning("Only the leader unit can add certificates to this relation")
+            return
+        relations = self._get_relevant_relations(relation_id)
+        if not relations:
+            logger.error(
+                "At least 1 matching relation ID not found with the relation name '%s'",
+                self.relationship_name,
+            )
+            return
+
+        for relation in relations:
+            self._set_relation_data(relation, set())
 
     def remove_certificate(
         self,
@@ -261,7 +300,7 @@ class CertificateTransferProvides(Object):
             None
         """
         if not self.charm.unit.is_leader():
-            logger.error("Only the leader unit can add certificates to this relation")
+            logger.warning("Only the leader unit can add certificates to this relation")
             return
         relations = self._get_relevant_relations(relation_id)
         if not relations:
@@ -385,6 +424,9 @@ class CertificateTransferRequires(Object):
         self.framework.observe(
             charm.on[relationship_name].relation_broken, self._on_relation_broken
         )
+        self.framework.observe(
+            charm.on[relationship_name].relation_created, self._on_relation_created
+        )
 
     def _on_relation_changed(self, event: RelationChangedEvent) -> None:
         """Emit certificate set updated event.
@@ -411,6 +453,21 @@ class CertificateTransferRequires(Object):
             None
         """
         self.on.certificates_removed.emit(relation_id=event.relation.id)
+
+    def _on_relation_created(self, event: RelationCreatedEvent) -> None:
+        """Handle relation created event.
+
+        Args:
+            event: Juju event
+
+        Returns:
+            None
+        """
+        if not self.model.unit.is_leader():
+            logger.debug("Only leader unit sets the version number in the app databag")
+            return
+        databag = event.relation.data[self.model.app]
+        RequirerApplicationData().dump(databag, False)
 
     def get_all_certificates(self, relation_id: Optional[int] = None) -> Set[str]:
         """Get transferred certificates.
