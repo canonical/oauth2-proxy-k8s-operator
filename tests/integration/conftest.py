@@ -3,8 +3,10 @@
 
 import os
 import shutil
+from pathlib import Path
 
 import pytest
+import pytest_asyncio
 from lightkube import Client, KubeConfig
 from pytest_operator.plugin import OpsTest
 
@@ -21,6 +23,16 @@ def client() -> Client:
 def lightkube_client(ops_test: OpsTest) -> Client:
     lightkube_client = Client(field_manager="oauth2-proxy-k8s", namespace=ops_test.model.name)
     return lightkube_client
+
+
+@pytest_asyncio.fixture(scope="module")
+async def local_charm(ops_test: OpsTest) -> Path:
+    # in GitHub CI, charms are built with charmcraftcache and uploaded to $CHARM_PATH
+    charm = os.getenv("CHARM_PATH")
+    if not charm:
+        # fall back to build locally - required when run outside of GitHub CI
+        charm = await ops_test.build_charm(".")
+    return charm
 
 
 @pytest.fixture(autouse=True, scope="module")
