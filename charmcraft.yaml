@@ -17,13 +17,8 @@ links:
   source: https://github.com/canonical/oauth2-proxy-k8s-operator
   issues: https://github.com/canonical/oauth2-proxy-k8s-operator/issues
 
-bases:
-  - build-on:
-    - name: ubuntu
-      channel: "22.04"
-    run-on:
-    - name: ubuntu
-      channel: "22.04"
+platforms:
+  ubuntu@22.04:amd64:
 
 parts:
   charm:
