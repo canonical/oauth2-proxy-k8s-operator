@@ -31,6 +31,7 @@ jobs:
     with:
       destination_channel: ${{ inputs.destination_channel}}
       source_branch: ${{ inputs.source_branch}}
+      use-charmcraftcache: true
     secrets:
       CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS}}
 
@@ -38,7 +39,7 @@ jobs:
     concurrency:
       group: ${{ needs.publish.outputs.track }}-${{ needs.publish.outputs.channel }}
       cancel-in-progress: true
-    needs: 
+    needs:
       - publish
     outputs:
       revision: ${{ steps.set-revision.outputs.revision }}
@@ -49,7 +50,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Set charm name
-        id: set-charm-name  
+        id: set-charm-name
         run: echo charm_name=$(cat charmcraft.yaml | yq '.name') >> $GITHUB_OUTPUT
       - name: Set revision
         id: set-revision
@@ -63,42 +64,41 @@ jobs:
           CHARM_NAME: ${{ steps.set-charm-name.outputs.charm_name }}
           # only cater for latest track for now
           TRACK: latest
-  
-  # dev-deploy:
-  #   concurrency:
-  #     group: ${{ needs.publish.outputs.track }}-${{ needs.publish.outputs.channel }}
-  #     cancel-in-progress: true
-  #   needs:
-  #     - publish
-  #     - revision
-  #   if: ${{ (needs.publish.outputs.channel == 'latest/edge') }}
-  #   uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@17b1464c20132f69a42ca846cd816715724ea5f3 # v1.4.2
-  #   with:
-  #       model: dev-iam
-  #       revision: ${{ needs.revision.outputs.revision }}
-  #       channel: ${{ needs.publish.outputs.channel}}
-  #       application: oauth2-proxy
-  #   secrets:
-  #     CLIENT_ID: ${{ secrets.JIMM_DEV_CLIENT_ID }}
-  #     CLIENT_SECRET: ${{ secrets.JIMM_DEV_CLIENT_SECRET }}
-  #     JIMM_URL: ${{ secrets.JIMM_URL }}
-  
-  # stg-deploy:
-  #   concurrency:
-  #     group: ${{ needs.publish.outputs.track }}-${{ needs.publish.outputs.channel }}
-  #     cancel-in-progress: true
-  #   needs:
-  #     - publish
-  #     - revision
-  #   if: ${{ (needs.publish.outputs.channel == 'latest/stable') }}
-  #   uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@17b1464c20132f69a42ca846cd816715724ea5f3 # v1.4.2
-  #   with:
-  #     model: stg-iam
-  #     revision: ${{ needs.revision.outputs.revision }}
-  #     channel: ${{ needs.publish.outputs.channel}}
-  #     application: oauth2-proxy
-  #   secrets:
-  #       CLIENT_ID: ${{ secrets.JIMM_STG_CLIENT_ID }}
-  #       CLIENT_SECRET: ${{ secrets.JIMM_STG_CLIENT_SECRET }}
-  #       JIMM_URL: ${{ secrets.JIMM_URL }}
-      
+
+#  dev-deploy:
+#    concurrency:
+#      group: ${{ needs.publish.outputs.track }}-${{ needs.publish.outputs.channel }}
+#      cancel-in-progress: true
+#    needs:
+#      - publish
+#      - revision
+#    if: ${{ (needs.publish.outputs.channel == 'latest/edge') }}
+#    uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@3bcf7c8d36b4e51e5a65d27041389d7456c17b57 # v1.8.0
+#    with:
+#        model: dev-iam
+#        revision: ${{ needs.revision.outputs.revision }}
+#        channel: ${{ needs.publish.outputs.channel}}
+#        application: oauth2-proxy
+#    secrets:
+#      CLIENT_ID: ${{ secrets.JIMM_DEV_CLIENT_ID }}
+#      CLIENT_SECRET: ${{ secrets.JIMM_DEV_CLIENT_SECRET }}
+#      JIMM_URL: ${{ secrets.JIMM_URL }}
+#
+#  stg-deploy:
+#    concurrency:
+#      group: ${{ needs.publish.outputs.track }}-${{ needs.publish.outputs.channel }}
+#      cancel-in-progress: true
+#    needs:
+#      - publish
+#      - revision
+#    if: ${{ (needs.publish.outputs.channel == 'latest/stable') }}
+#    uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@3bcf7c8d36b4e51e5a65d27041389d7456c17b57 # v1.8.0
+#    with:
+#      model: stg-iam
+#      revision: ${{ needs.revision.outputs.revision }}
+#      channel: ${{ needs.publish.outputs.channel}}
+#      application: oauth2-proxy
+#    secrets:
+#        CLIENT_ID: ${{ secrets.JIMM_STG_CLIENT_ID }}
+#        CLIENT_SECRET: ${{ secrets.JIMM_STG_CLIENT_SECRET }}
+#        JIMM_URL: ${{ secrets.JIMM_URL }}

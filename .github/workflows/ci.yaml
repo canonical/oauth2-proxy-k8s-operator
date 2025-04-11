@@ -3,32 +3,24 @@ run-name: CI for ${{ github.sha }} on ${{ github.ref_name }}
 
 on:
    workflow_dispatch:
+   workflow_call:
    push:
      branches:
      - "main"
      - "release-**"
      - "track/**"
      paths-ignore:
-     - 'terraform/**'
+     - "terraform/**"
    pull_request:
      branches:
      - "*"
      paths-ignore:
-     - 'terraform/**'
-
+     - "terraform/**"
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-24.04
-    if: ${{ github.event_name == 'pull_request' }}
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - name: Install dependencies
-        run: python3 -m pip install tox
-      - name: Run linters
-        run: tox -e lint
-
   tests:
-    name: Run Tests
-    uses: ./.github/workflows/tests.yaml
+    name: CI
+    uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@3bcf7c8d36b4e51e5a65d27041389d7456c17b57 # v1.8.0
+    with:
+      container-name: "oauth2-proxy"
+      use-charmcraftcache: true
