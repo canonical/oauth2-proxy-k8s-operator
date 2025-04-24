@@ -25,6 +25,7 @@ parts:
     charm-binary-python-packages:
       - jsonschema
       - pydantic
+      - "setuptools>=70.0.0"
 
 config:
   options:
