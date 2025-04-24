@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v1.1.0...v1.1.1) (2025-04-24)
+
+
+### Bug Fixes
+
+* update charm dependent libs ([672b28c](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/672b28ca1d1d0ff18d3b14b11dea2f8f878d5da5))
+* use identity-team workflows v1.8.5, add promote workflow ([e7a0e23](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/e7a0e232a0ae94093ace0b9d27036634f4dbcdc8))
+
 ## [1.1.0](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v1.0.0...v1.1.0) (2025-04-23)
 
 
