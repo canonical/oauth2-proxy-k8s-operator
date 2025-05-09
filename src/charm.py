@@ -27,6 +27,12 @@ from charms.oauth2_proxy_k8s.v0.forward_auth import (
     ForwardAuthRelationRemovedEvent,
     InvalidForwardAuthConfigEvent,
 )
+from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
+    K8sResourcePatchFailedEvent,
+    KubernetesComputeResourcesPatch,
+    ResourceRequirements,
+    adjust_resource_requirements,
+)
 from charms.traefik_k8s.v2.ingress import (
     IngressPerAppReadyEvent,
     IngressPerAppRequirer,
@@ -87,6 +93,12 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
 
         self.trusted_cert_transfer = TrustedCertificatesTransferIntegration(self)
 
+        self.resources_patch = KubernetesComputeResourcesPatch(
+            self,
+            WORKLOAD_CONTAINER,
+            resource_reqs_func=self._resource_reqs_from_config,
+        )
+
         self.oauth = OAuthRequirer(self, self._oauth_client_config)
 
         self.auth_proxy = AuthProxyProvider(self, relation_name=AUTH_PROXY_RELATION_NAME)
@@ -95,9 +107,9 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             relation_name=FORWARD_AUTH_RELATION_NAME,
             forward_auth_config=self._forward_auth_config,
         )
-
         self.framework.observe(self.on[WORKLOAD_CONTAINER].pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
+
         self.framework.observe(self.on.update_status, self._on_update_status)
 
         # oauth integration observations
@@ -116,6 +128,11 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         self.framework.observe(
             self.trusted_cert_transfer.cert_transfer_requires.on.certificates_removed,
             self._on_trusted_certificates_removed,
+        )
+
+        # resource patching
+        self.framework.observe(
+            self.resources_patch.on.patch_failed, self._on_resource_patch_failed
         )
 
         # forward-auth integration observations
@@ -174,7 +191,9 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
     @property
     def _forward_auth_config(self) -> ForwardAuthConfig:
         auth_proxy_data = AuthProxyIntegrationData.load(self.auth_proxy)
-        oauth2_proxy_url = f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{OAUTH2_PROXY_API_PORT}"
+        oauth2_proxy_url = (
+            f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{OAUTH2_PROXY_API_PORT}"
+        )
         return ForwardAuthConfig(
             decisions_address=oauth2_proxy_url,
             app_names=auth_proxy_data.app_names,
@@ -253,7 +272,9 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             template = Template(file.read())
 
         rendered = template.render(
-            authenticated_emails_file=ACCESS_LIST_EMAILS_PATH if auth_proxy_data.authenticated_emails else None,
+            authenticated_emails_file=ACCESS_LIST_EMAILS_PATH
+            if auth_proxy_data.authenticated_emails
+            else None,
             authenticated_email_domains=auth_proxy_data.authenticated_email_domains,
             client_id=oauth_provider_info.client_id if oauth_integration else "default",
             client_secret=oauth_provider_info.client_secret if oauth_integration else "default",
@@ -411,16 +432,29 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         config = self._render_config_file()
         self._container.push(CONFIG_FILE_PATH, config, make_dirs=True)
 
-        self._container.add_layer(WORKLOAD_CONTAINER, self._oauth2_proxy_pebble_layer, combine=True)
+        self._container.add_layer(
+            WORKLOAD_CONTAINER, self._oauth2_proxy_pebble_layer, combine=True
+        )
 
         try:
             self._container.restart(WORKLOAD_CONTAINER)
         except ChangeError as err:
             logger.error(str(err))
-            self.unit.status = BlockedStatus("Failed to restart the container, please consult the logs")
+            self.unit.status = BlockedStatus(
+                "Failed to restart the container, please consult the logs"
+            )
             return
 
         self.unit.status = ActiveStatus()
+
+    def _on_resource_patch_failed(self, event: K8sResourcePatchFailedEvent) -> None:
+        logger.error(f"Failed to patch resource constraints: {event.message}")
+        self.unit.status = BlockedStatus(event.message)
+
+    def _resource_reqs_from_config(self) -> ResourceRequirements:
+        limits = {"cpu": self.model.config.get("cpu"), "memory": self.model.config.get("memory")}
+        requests = {"cpu": "100m", "mem": "200Mi"}
+        return adjust_resource_requirements(limits, requests, adhere_to_requests=True)
 
 
 if __name__ == "__main__":  # pragma: nocover
