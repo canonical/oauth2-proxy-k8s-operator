@@ -22,6 +22,19 @@ def harness() -> Generator[Harness, None, None]:
     harness.cleanup()
 
 
+@pytest.fixture(autouse=True)
+def mocked_k8s_resource_patch(mocker: MockerFixture) -> None:
+    mocker.patch(
+        "charms.observability_libs.v0.kubernetes_compute_resources_patch.ResourcePatcher",
+        autospec=True,
+    )
+    mocker.patch.multiple(
+        "charm.KubernetesComputeResourcesPatch",
+        _namespace="testing",
+        _patch=lambda *a, **kw: True,
+        is_ready=lambda *a, **kw: True,
+    )
+
 @pytest.fixture
 def mocked_container() -> MagicMock:
     return create_autospec(Container)
@@ -29,17 +42,24 @@ def mocked_container() -> MagicMock:
 
 @pytest.fixture()
 def mocked_cookie_encryption_key(mocker: MockerFixture) -> MagicMock:
-    return mocker.patch("charm.Oauth2ProxyK8sOperatorCharm._cookie_encryption_key", return_value="WrfOcYmVBwyduEbKYTUhO4X7XVaOQ1wF")
+    return mocker.patch(
+        "charm.Oauth2ProxyK8sOperatorCharm._cookie_encryption_key",
+        return_value="WrfOcYmVBwyduEbKYTUhO4X7XVaOQ1wF",
+    )
 
 
 @pytest.fixture()
 def mocked_oauth2_proxy_is_running(mocker: MockerFixture) -> MagicMock:
-    return mocker.patch("charm.Oauth2ProxyK8sOperatorCharm._oauth2_proxy_service_is_running", return_value=True)
+    return mocker.patch(
+        "charm.Oauth2ProxyK8sOperatorCharm._oauth2_proxy_service_is_running", return_value=True
+    )
 
 
 @pytest.fixture
 def mocked_forward_auth_update(mocker: MockerFixture) -> MagicMock:
-    return mocker.patch("charms.oauth2_proxy_k8s.v0.forward_auth.ForwardAuthProvider.update_forward_auth_config")
+    return mocker.patch(
+        "charms.oauth2_proxy_k8s.v0.forward_auth.ForwardAuthProvider.update_forward_auth_config"
+    )
 
 
 @pytest.fixture(autouse=True)
