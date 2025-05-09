@@ -62,12 +62,16 @@ def setup_requirer_relation(harness: Harness) -> int:
 
 
 class TestAuthProxyProviderIntegration:
-    def test_auth_proxy_config_changed_event_emitted_when_relation_changed(self, harness: Harness) -> None:
+    def test_auth_proxy_config_changed_event_emitted_when_relation_changed(
+        self, harness: Harness
+    ) -> None:
         _ = setup_requirer_relation(harness)
 
         assert any(isinstance(e, AuthProxyConfigChangedEvent) for e in harness.charm.events)
 
-    def test_auth_proxy_config_changed_event_not_emitted_when_invalid_config_provided(self, harness: Harness) -> None:
+    def test_auth_proxy_config_changed_event_not_emitted_when_invalid_config_provided(
+        self, harness: Harness
+    ) -> None:
         relation_id = harness.add_relation("auth-proxy", "requirer")
         harness.add_relation_unit(relation_id, "requirer/0")
         harness.update_relation_data(
@@ -82,7 +86,9 @@ class TestAuthProxyProviderIntegration:
 
         assert not any(isinstance(e, AuthProxyConfigChangedEvent) for e in harness.charm.events)
 
-    def test_auth_proxy_config_removed_event_emitted_when_relation_removed(self, harness: Harness) -> None:
+    def test_auth_proxy_config_removed_event_emitted_when_relation_removed(
+        self, harness: Harness
+    ) -> None:
         relation_id = setup_requirer_relation(harness)
         harness.remove_relation(relation_id)
 

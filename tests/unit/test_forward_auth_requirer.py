@@ -90,7 +90,9 @@ class TestForwardAuthRequirerIntegration:
 
         assert relation_data == dict_to_relation_data(FORWARD_AUTH_REQUIRER_CONFIG)
 
-    def test_get_provider_info_when_data_available(self, harness: Harness, provider_info: Dict) -> None:
+    def test_get_provider_info_when_data_available(
+        self, harness: Harness, provider_info: Dict
+    ) -> None:
         _ = setup_provider_relation(harness)
 
         expected_provider_info = harness.charm.forward_auth.get_provider_info()
@@ -99,7 +101,9 @@ class TestForwardAuthRequirerIntegration:
         assert expected_provider_info.app_names == provider_info["app_names"]
         assert expected_provider_info.headers == provider_info["headers"]
 
-    def test_forward_auth_config_changed_emitted_when_relation_changed(self, harness: Harness) -> None:
+    def test_forward_auth_config_changed_emitted_when_relation_changed(
+        self, harness: Harness
+    ) -> None:
         _ = setup_provider_relation(harness)
 
         assert any(isinstance(e, AuthConfigChangedEvent) for e in harness.charm.events)
