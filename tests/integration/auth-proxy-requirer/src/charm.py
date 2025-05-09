@@ -50,7 +50,7 @@ class AuthProxyRequirerMock(CharmBase):
             headers=AUTH_PROXY_HEADERS,
             allowed_endpoints=AUTH_PROXY_ALLOWED_ENDPOINTS,
             authenticated_emails=AUTH_PROXY_AUTHENTICATED_EMAILS,
-            authenticated_email_domains=AUTH_PROXY_AUTHENTICATED_EMAIL_DOMAINS
+            authenticated_email_domains=AUTH_PROXY_AUTHENTICATED_EMAIL_DOMAINS,
         )
 
     @property

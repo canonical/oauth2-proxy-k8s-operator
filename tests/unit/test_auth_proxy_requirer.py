@@ -67,7 +67,9 @@ class TestAuthProxyRequirerIntegration:
 
         assert relation_data == dict_to_relation_data(AUTH_PROXY_CONFIG)
 
-    def test_warning_when_http_protected_url_provided(self, harness: Harness, caplog: pytest.LogCaptureFixture) -> None:
+    def test_warning_when_http_protected_url_provided(
+        self, harness: Harness, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """Check that a warning appears when one of the provided urls uses http scheme."""
         caplog.set_level(logging.WARNING)
         auth_proxy_config = AuthProxyConfig(**AUTH_PROXY_CONFIG)
@@ -128,7 +130,9 @@ def harness_invalid_config() -> Generator:
 
 
 class TestAuthProxyRequirerIntegrationInvalidConfig:
-    def test_event_emitted_when_invalid_auth_proxy_config(self, harness_invalid_config: Harness) -> None:
+    def test_event_emitted_when_invalid_auth_proxy_config(
+        self, harness_invalid_config: Harness
+    ) -> None:
         harness_invalid_config.add_relation("auth-proxy", "provider")
 
         assert any(

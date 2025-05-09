@@ -35,6 +35,7 @@ def mocked_k8s_resource_patch(mocker: MockerFixture) -> None:
         is_ready=lambda *a, **kw: True,
     )
 
+
 @pytest.fixture
 def mocked_container() -> MagicMock:
     return create_autospec(Container)
