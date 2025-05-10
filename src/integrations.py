@@ -48,7 +48,9 @@ class TrustedCertificatesTransferIntegration:
     def __init__(self, charm: CharmBase):
         self._charm = charm
         self._container = charm._container
-        self.cert_transfer_requires = CertificateTransferRequires(charm, relationship_name="receive-ca-cert")
+        self.cert_transfer_requires = CertificateTransferRequires(
+            charm, relationship_name="receive-ca-cert"
+        )
 
     def update_trusted_ca_certs(self) -> None:
         """Receive trusted certificates from the certificate_transfer integration.
@@ -56,7 +58,9 @@ class TrustedCertificatesTransferIntegration:
         This function is needed because relation events are not emitted on upgrade,
         and because there is no persistent storage for certs.
         """
-        if not self._charm.model.get_relation(relation_name=self.cert_transfer_requires.relationship_name):
+        if not self._charm.model.get_relation(
+            relation_name=self.cert_transfer_requires.relationship_name
+        ):
             logger.warning(
                 "Missing certificate_transfer integration, run `juju config oauth2-proxy-k8s dev=true` to skip validation of certificates presented when using HTTPS providers. Don't do this in production"
             )
@@ -65,7 +69,9 @@ class TrustedCertificatesTransferIntegration:
 
     def _push_ca_certs(self) -> None:
         certs = set()
-        if relation := self._charm.model.get_relation(self.cert_transfer_requires.relationship_name):
+        if relation := self._charm.model.get_relation(
+            self.cert_transfer_requires.relationship_name
+        ):
             for unit in set(relation.units).difference([self._charm.app, self._charm.unit]):
                 # Handles the case of multi-unit CA, each unit providing a different ca cert
                 if cert := relation.data[unit].get("ca"):

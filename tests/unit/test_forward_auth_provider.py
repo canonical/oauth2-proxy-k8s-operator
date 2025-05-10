@@ -90,13 +90,16 @@ class TestForwardAuthProviderIntegration:
         harness.charm.forward_auth.update_forward_auth_config(forward_auth_config="")
         assert "Forward-auth config is missing" in caplog.text
 
-    def test_forward_auth_proxy_set_emitted_when_valid_config_provided(self, harness: Harness) -> None:
+    def test_forward_auth_proxy_set_emitted_when_valid_config_provided(
+        self, harness: Harness
+    ) -> None:
         _ = setup_requirer_relation(harness)
 
         assert any(isinstance(e, ForwardAuthProxySet) for e in harness.charm.events)
 
     def test_forward_auth_invalid_config_emitted_when_app_not_related_to_ingress(
-        self, harness: Harness,
+        self,
+        harness: Harness,
     ) -> None:
         relation_id = harness.add_relation("forward-auth", "requirer")
         harness.add_relation_unit(relation_id, "requirer/0")
