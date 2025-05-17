@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.2](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v1.1.1...v1.1.2) (2025-05-17)
+
+
+### Bug Fixes
+
+* address setuptools CVEs ([9be80f9](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/9be80f9bb03ff7254af3aef63832b8a4cb46160f))
+* address setuptools CVEs ([f6a1152](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/f6a11527fc61bc6a57973b13f768d7b87d60f3fd))
+
 ## [1.1.1](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v1.1.0...v1.1.1) (2025-04-24)
 
 
