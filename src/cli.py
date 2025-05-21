@@ -16,6 +16,7 @@ VERSION_REGEX = re.compile(r"v(\w+\.)+(\w)+")
 
 class CommandLine:
     """A helper object for interacting with the OAuth2 Proxy command line."""
+
     def __init__(self, container: Container) -> None:
         self.container = container
 
@@ -31,7 +32,9 @@ class CommandLine:
         matched = VERSION_REGEX.search(stdout)
         return matched[0] if matched else None
 
-    def _run_cmd(self, cmd: list[str], timeout: float = 20, environment: Optional[dict] = None) -> str:
+    def _run_cmd(
+        self, cmd: list[str], timeout: float = 20, environment: Optional[dict] = None
+    ) -> str:
         logger.debug("Running command: %s", cmd)
         process = self.container.exec(cmd, environment=environment, timeout=timeout)
         try:
