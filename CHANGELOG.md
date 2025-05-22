@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.1.2](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v1.1.1...v1.1.2) (2025-05-21)
+
+
+### Bug Fixes
+
+* add pod resource constraints ([22547e7](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/22547e745cdcf263ee653dd64cc0956f7b5078fc))
+* address setuptools CVEs ([9be80f9](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/9be80f9bb03ff7254af3aef63832b8a4cb46160f))
+* address setuptools CVEs ([f6a1152](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/f6a11527fc61bc6a57973b13f768d7b87d60f3fd))
+* switch usptreams status code to 200 ([085d4d0](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/085d4d01d92dabaa76d1eb2919495ad8690fe8c6))
+* switch usptreams status code to 200 ([3da9252](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/3da9252bb641068df3c3638c33795f7751157704))
+
 ## [1.1.1](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v1.1.0...v1.1.1) (2025-04-24)
 
 
