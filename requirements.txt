@@ -1,7 +1,7 @@
 ops ~= 2.5
 jinja2
 jsonschema
-pydantic==2.11.4
+pydantic==2.11.5
 tenacity==9.1.2
 lightkube
 lightkube-models
