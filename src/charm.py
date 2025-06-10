@@ -8,6 +8,7 @@ import logging
 import os
 import secrets
 from typing import Optional
+from urllib.parse import urlparse
 
 from charms.certificate_transfer_interface.v1.certificate_transfer import (
     CertificatesAvailableEvent,
@@ -169,6 +170,12 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         return public_endpoint
 
     @property
+    def _public_domain(self) -> str:
+        """Retrieve the url of the application."""
+        url = urlparse(self._public_url)
+        return url.netloc
+
+    @property
     def _redirect_url(self) -> str:
         return os.path.join(self._public_url, "oauth2/callback")
 
@@ -283,6 +290,7 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             scopes=OAUTH_SCOPES,
             redirect_url=self._redirect_url,
             skip_auth_routes=auth_proxy_data.allowed_endpoints,
+            whitelist_domains=self._public_domain,
             dev=self.config["dev"],
         )
         return rendered

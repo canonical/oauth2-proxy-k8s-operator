@@ -15,12 +15,12 @@ skip_provider_button="true"
 {%- endif %}
 
 {%- if authenticated_emails_file or authenticated_email_domains %}
-{%- if authenticated_emails_file %}
+{%-   if authenticated_emails_file %}
 authenticated_emails_file="{{ authenticated_emails_file }}"
-{%- endif %}
-{%- if authenticated_email_domains %}
+{%-   endif %}
+{%-   if authenticated_email_domains %}
 email_domains={{ authenticated_email_domains }}
-{%- endif %}
+{%-   endif %}
 {%- else %}
 email_domains="*"
 {%- endif %}
@@ -28,6 +28,10 @@ set_xauthrequest="true"
 {%- if skip_auth_routes %}
 skip_auth_routes={{ skip_auth_routes }}
 {%- endif %}
+{%- if whitelist_domains %}
+whitelist_domains="{{ whitelist_domains }}"
+{%- endif %}
+
 
 # Mandatory option when using oauth2-proxy with traefik
 reverse_proxy="true"
