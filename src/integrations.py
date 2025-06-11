@@ -68,16 +68,9 @@ class TrustedCertificatesTransferIntegration:
         self._push_ca_certs()
 
     def _push_ca_certs(self) -> None:
-        certs = set()
-        if relation := self._charm.model.get_relation(
-            self.cert_transfer_requires.relationship_name
-        ):
-            for unit in set(relation.units).difference([self._charm.app, self._charm.unit]):
-                # Handles the case of multi-unit CA, each unit providing a different ca cert
-                if cert := relation.data[unit].get("ca"):
-                    certs.add(cert)
-
+        certs = self.cert_transfer_requires.get_all_certificates()
         ca_bundle = "\n".join(sorted(certs))
+
         with open(LOCAL_CA_BUNDLE_PATH, mode="wt") as f:
             f.write(ca_bundle)
 
