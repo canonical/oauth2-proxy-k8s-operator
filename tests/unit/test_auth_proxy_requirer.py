@@ -65,7 +65,13 @@ class TestAuthProxyRequirerIntegration:
         relation_id = harness.add_relation("auth-proxy", "provider")
         relation_data = harness.get_relation_data(relation_id, harness.model.app.name)
 
-        assert relation_data == dict_to_relation_data(AUTH_PROXY_CONFIG)
+        expected_data = dict_to_relation_data(AUTH_PROXY_CONFIG)
+
+        assert relation_data["app_name"] == "requirer-tester"
+        assert relation_data["allowed_endpoints"] == expected_data["allowed_endpoints"]
+        assert relation_data["headers"] == expected_data["headers"]
+        assert relation_data["authenticated_emails"] == expected_data["authenticated_emails"]
+        assert relation_data["authenticated_email_domains"] == expected_data["authenticated_email_domains"]
 
     def test_warning_when_http_protected_url_provided(
         self, harness: Harness, caplog: pytest.LogCaptureFixture

@@ -88,6 +88,7 @@ def setup_auth_proxy_relation(
         relation_id,
         app_name,
         {
+            "app_name": "requirer",
             "protected_urls": '["https://example.com"]',
             "allowed_endpoints": '["about/app"]',
             "headers": '["X-Auth-Request-User", "X-Auth-Request-Groups"]',
