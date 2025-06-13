@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.3](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v1.1.2...v1.1.3) (2025-06-13)
+
+
+### Bug Fixes
+
+* add whitelist_domains config ([4965b2a](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/4965b2a6b7d33bf70eda47a35fda23428fda8544))
+* fix certificate transfer integration ([bf16621](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/bf1662156048421c96ab00c21df0b3154e45d545))
+* record app name in databag ([0c64620](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/0c64620c8b4e706e6e0868965f9af7c4425a9f60))
+* record app name in databag ([240e844](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/240e844c59ad6e19898f9132749ced0e903792cf))
+
 ## [1.1.2](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v1.1.1...v1.1.2) (2025-05-21)
 
 
