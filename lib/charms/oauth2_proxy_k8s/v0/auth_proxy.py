@@ -82,7 +82,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 1
+LIBPATCH = 2
 
 RELATION_NAME = "auth-proxy"
 INTERFACE_NAME = "auth_proxy"
@@ -118,6 +118,7 @@ AUTH_PROXY_REQUIRER_JSON_SCHEMA = {
         },
         "authenticated_emails": {"type": "array", "default": [], "items": {"type": "string"}},
         "authenticated_email_domains": {"type": "array", "default": [], "items": {"type": "string"}},
+        "app_name": {"type": "string", "default": None},
     },
     "required": ["protected_urls", "allowed_endpoints", "headers", "authenticated_emails", "authenticated_email_domains"],
 }
@@ -202,6 +203,7 @@ class AuthProxyConfig:
     allowed_endpoints: List[str] = field(default_factory=lambda: [])
     authenticated_emails: List[str] = field(default_factory=lambda: [])
     authenticated_email_domains: List[str] = field(default_factory=lambda: [])
+    app_name: Optional[str] = None
 
     def validate(self) -> None:
         """Validate the auth proxy configuration."""
@@ -371,7 +373,7 @@ class AuthProxyProvider(AuthProxyRelation):
         app_names = []
         for relation in self._charm.model.relations[self._relation_name]:
             if relation.data[relation.app]:
-                app_names.append(relation.app.name)
+                app_names.append(relation.data[relation.app]["app_name"])
 
         return app_names
 
@@ -493,6 +495,7 @@ class AuthProxyRequirer(AuthProxyRelation):
             return
 
         data = _dump_data(auth_proxy_config.to_dict(), AUTH_PROXY_REQUIRER_JSON_SCHEMA)
+        data["app_name"] = self._charm.app.name
         relation.data[self.model.app].update(data)
 
     def update_auth_proxy_config(
@@ -500,4 +503,3 @@ class AuthProxyRequirer(AuthProxyRelation):
     ) -> None:
         """Update the auth proxy config stored in the object."""
         self._update_relation_data(auth_proxy_config, relation_id=relation_id)
-
