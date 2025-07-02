@@ -1,4 +1,4 @@
-ops ~= 2.5
+ops ~=3.0
 jinja2
 jsonschema
 pydantic==2.11.7
