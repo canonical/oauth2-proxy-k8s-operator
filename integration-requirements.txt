@@ -2,7 +2,7 @@ httpx==0.28.1
 juju==3.6.1.2
 protobuf~=6.31.0
 pytest
-pytest-operator==0.42.0
+pytest-operator==0.42.1
 requests
 lightkube
 lightkube-models
