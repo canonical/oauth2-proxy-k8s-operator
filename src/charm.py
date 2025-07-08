@@ -40,7 +40,7 @@ from charms.traefik_k8s.v2.ingress import (
     IngressPerAppRevokedEvent,
 )
 from jinja2 import Template
-from ops import main, pebble
+from ops import StoredState, main, pebble
 from ops.charm import CharmBase, ConfigChangedEvent, HookEvent, PebbleReadyEvent, UpdateStatusEvent
 from ops.model import (
     ActiveStatus,
@@ -52,6 +52,7 @@ from ops.model import (
 )
 from ops.pebble import ChangeError, CheckStatus, Layer
 
+import utils
 from cli import CommandLine
 from constants import (
     ACCESS_LIST_EMAILS_PATH,
@@ -78,8 +79,14 @@ logger = logging.getLogger(__name__)
 class Oauth2ProxyK8sOperatorCharm(CharmBase):
     """Charmed Oauth2-Proxy."""
 
+    _stored = StoredState()
+    config_changed = False
+
     def __init__(self, *args) -> None:
         super().__init__(*args)
+        self._stored.set_default(
+            config_hash=None,
+        )
 
         self._container = self.unit.get_container(WORKLOAD_CONTAINER)
         self.cli = CommandLine(self._container)
@@ -266,7 +273,7 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         except (KeyError, pebble.ConnectionError):
             return False
 
-    def _render_config_file(self) -> str:
+    def _render_conf_file(self) -> str:
         """Render the OAuth2 Proxy configuration file."""
         oauth_integration = False
         auth_proxy_data = AuthProxyIntegrationData.load(self.auth_proxy)
@@ -412,6 +419,29 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         self._handle_status_update_config(event)
         self.forward_auth.update_forward_auth_config(self._forward_auth_config)
 
+    @property
+    def current_config_hash(self) -> Optional[int]:
+        return self._stored.config_hash
+
+    def _restart_service(self, restart: bool = False) -> None:
+        if restart:
+            self._container.restart(WORKLOAD_CONTAINER)
+        elif not self._container.get_service(WORKLOAD_CONTAINER).is_running():
+            self._container.start(WORKLOAD_CONTAINER)
+        else:
+            self._container.replan()
+
+    def _update_config(self) -> None:
+        conf = self._render_conf_file()
+        config_hash = utils.hash(conf)
+        if config_hash == self.current_config_hash:
+            return
+
+        self._container.push(CONFIG_FILE_PATH, conf, make_dirs=True)
+
+        self._stored.config_hash = config_hash
+        self.config_changed = True
+
     @log_event_handler(logger)
     def _handle_status_update_config(self, event: HookEvent) -> None:
         """Update the application status and configuration and restart the container.
@@ -437,15 +467,13 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
 
         self.trusted_cert_transfer.update_trusted_ca_certs()
 
-        config = self._render_config_file()
-        self._container.push(CONFIG_FILE_PATH, config, make_dirs=True)
-
+        self._update_config()
         self._container.add_layer(
             WORKLOAD_CONTAINER, self._oauth2_proxy_pebble_layer, combine=True
         )
 
         try:
-            self._container.restart(WORKLOAD_CONTAINER)
+            self._restart_service(restart=self.config_changed)
         except ChangeError as err:
             logger.error(str(err))
             self.unit.status = BlockedStatus(
