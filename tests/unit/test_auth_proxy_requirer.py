@@ -71,7 +71,10 @@ class TestAuthProxyRequirerIntegration:
         assert relation_data["allowed_endpoints"] == expected_data["allowed_endpoints"]
         assert relation_data["headers"] == expected_data["headers"]
         assert relation_data["authenticated_emails"] == expected_data["authenticated_emails"]
-        assert relation_data["authenticated_email_domains"] == expected_data["authenticated_email_domains"]
+        assert (
+            relation_data["authenticated_email_domains"]
+            == expected_data["authenticated_email_domains"]
+        )
 
     def test_warning_when_http_protected_url_provided(
         self, harness: Harness, caplog: pytest.LogCaptureFixture
