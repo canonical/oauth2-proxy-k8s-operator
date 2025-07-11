@@ -111,6 +111,10 @@ charmcraft pack && juju refresh --path="./*amd64.charm" oauth2-proxy-k8s --force
 # Deploy traefik operator
 juju deploy traefik-k8s traefik-public --channel latest/stable --trust
 
+# Deploy certificates operator and integrate it with traefik
+juju deploy self-signed-certificates --channel 1/stable --trust
+juju integrate self-signed-certificates:certificates traefik-public
+
 # Integrate traefik with oauth2-proxy
 juju integrate oauth2-proxy-k8s:ingress traefik-public
 juju config traefik-public enable_experimental_forward_auth=True
@@ -118,6 +122,9 @@ juju integrate oauth2-proxy-k8s traefik-public:experimental-forward-auth
 
 # Deploy Identity Platform
 juju deploy identity-platform --channel latest/edge --trust
+
+# Integrate with certificates charm
+juju integrate oauth2-proxy-k8s:receive-ca-cert self-signed-certificates
 
 # Integrate with oauth
 juju integrate oauth2-proxy-k8s:oauth hydra
