@@ -42,6 +42,21 @@ juju deploy traefik-k8s traefik-public --channel latest/stable --trust
 juju integrate traefik-public oauth2-proxy-k8s:ingress
 ```
 
+### Certificates
+
+OAuth2 Proxy offers integration with [self-signed-certificates](https://charmhub.io/self-signed-certificates).
+This integration allows OAuth2 Proxy to receive CA certificates so that it can trust Hydra, the OAuth provider.
+
+It can be added by deploying the `self-signed-certificates` charm and establishing integrations:
+
+```commandline
+juju deploy self-signed-certificates --channel 1/stable --trust
+juju integrate self-signed-certificates:certificates traefik-public
+juju integrate oauth2-proxy-k8s:receive-ca-cert self-signed-certificates
+```
+
+> Note: Deploy `self-signed-certificates` from the `1/stable` channel or higher.
+
 ### Traefik ForwardAuth
 
 OAuth2 Proxy offers integration with
@@ -93,6 +108,12 @@ juju integrate oauth2-proxy-k8s:oauth hydra
 ```
 
 Note that `oauth` requires `ingress` integration provided by Traefik Charmed Operator.
+
+In order to trust the OAuth provider, you must also integrate OAuth2 Proxy
+with `receive-ca-cert` (e.g. using charmed [lego](https://charmhub.io/lego) or [self-signed-certificates](https://charmhub.io/self-signed-certificates)).
+
+Alternatively, for development purposes you can bypass certificate validation by setting `juju config oauth2-proxy-k8s dev=true`.
+Don't do this in production.
 
 ## Security
 
