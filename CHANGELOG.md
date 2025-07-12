@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.4](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v1.1.3...v1.1.4) (2025-07-12)
+
+
+### Bug Fixes
+
+* don't restart service if config didn't change ([586541e](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/586541e1800d81d671292c97429ec15914e26745))
+
 ## [1.1.3](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v1.1.2...v1.1.3) (2025-06-13)
 
 
