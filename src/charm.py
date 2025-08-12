@@ -5,10 +5,6 @@
 """Charm the application."""
 
 import logging
-import os
-import secrets
-from typing import Optional
-from urllib.parse import urlparse
 
 from charms.certificate_transfer_interface.v1.certificate_transfer import (
     CertificatesAvailableEvent,
@@ -39,59 +35,57 @@ from charms.traefik_k8s.v2.ingress import (
     IngressPerAppRequirer,
     IngressPerAppRevokedEvent,
 )
-from jinja2 import Template
-from ops import StoredState, main, pebble
+from ops import main, pebble
 from ops.charm import CharmBase, ConfigChangedEvent, HookEvent, PebbleReadyEvent, UpdateStatusEvent
 from ops.model import (
     ActiveStatus,
     BlockedStatus,
     MaintenanceStatus,
     ModelError,
-    Relation,
     WaitingStatus,
 )
-from ops.pebble import ChangeError, CheckStatus, Layer
+from ops.pebble import CheckStatus, Layer
 
-import utils
 from cli import CommandLine
+from configs import CharmConfig
 from constants import (
     ACCESS_LIST_EMAILS_PATH,
     AUTH_PROXY_RELATION_NAME,
-    CONFIG_FILE_PATH,
-    COOKIES_KEY,
     FORWARD_AUTH_RELATION_NAME,
-    HTTP_PROXY,
-    HTTPS_PROXY,
-    NO_PROXY,
     OAUTH2_PROXY_API_PORT,
     OAUTH_GRANT_TYPES,
     OAUTH_SCOPES,
-    PEER,
+    PEBBLE_READY_CHECK_NAME,
     WORKLOAD_CONTAINER,
     WORKLOAD_SERVICE,
 )
-from integrations import AuthProxyIntegrationData, TrustedCertificatesTransferIntegration
+from exceptions import PebbleServiceError
+from integrations import (
+    AuthProxyIntegrationData,
+    IngressIntegrationData,
+    OAuthIntegrationData,
+    PeerData,
+    TrustedCertificatesTransferIntegration,
+)
 from log import log_event_handler
+from services import PebbleService
 
 logger = logging.getLogger(__name__)
 
 
 class Oauth2ProxyK8sOperatorCharm(CharmBase):
-    """Charmed Oauth2-Proxy."""
-
-    _stored = StoredState()
-    config_changed = False
+    """Charmed Oauth2 Proxy."""
 
     def __init__(self, *args) -> None:
         super().__init__(*args)
-        self._stored.set_default(
-            config_hash=None,
-        )
 
         self._container = self.unit.get_container(WORKLOAD_CONTAINER)
+        self._pebble_service = PebbleService(self.unit)
         self.cli = CommandLine(self._container)
+        self.peer_data = PeerData(self.model)
+        self.charm_config = CharmConfig(self.config)
 
-        self.ingress = IngressPerAppRequirer(
+        self.ingress_requirer = IngressPerAppRequirer(
             self,
             relation_name="ingress",
             port=OAUTH2_PROXY_API_PORT,
@@ -125,8 +119,8 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         self.framework.observe(self.oauth.on.oauth_info_removed, self._on_oauth_info_changed)
 
         # ingress integration observations
-        self.framework.observe(self.ingress.on.ready, self._on_ingress_ready)
-        self.framework.observe(self.ingress.on.revoked, self._on_ingress_revoked)
+        self.framework.observe(self.ingress_requirer.on.ready, self._on_ingress_ready)
+        self.framework.observe(self.ingress_requirer.on.revoked, self._on_ingress_revoked)
 
         # certificate integrations observations
         self.framework.observe(
@@ -163,43 +157,26 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         )
 
     @property
-    def _peers(self) -> Optional[Relation]:
-        """Fetch the peer relation."""
-        return self.model.get_relation(PEER)
+    def _pebble_layer(self) -> Layer:
+        ingress_data = IngressIntegrationData.load(self.ingress_requirer)
+        oauth_data = OAuthIntegrationData.load(self.oauth)
+        auth_proxy_data = AuthProxyIntegrationData.load(self.auth_proxy)
 
-    @property
-    def _public_url(self) -> str:
-        """Retrieve the url of the application."""
-        public_endpoint = (
-            self.ingress.url
-            or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{OAUTH2_PROXY_API_PORT}"
+        return self._pebble_service.render_pebble_layer(
+            self.charm_config,
+            ingress_data,
+            oauth_data,
+            auth_proxy_data,
+            self.peer_data,
         )
-        return public_endpoint
-
-    @property
-    def _public_domain(self) -> str:
-        """Retrieve the url of the application."""
-        url = urlparse(self._public_url)
-        return url.netloc
-
-    @property
-    def _redirect_url(self) -> str:
-        return os.path.join(self._public_url, "oauth2/callback")
-
-    @property
-    def _cookie_encryption_key(self) -> Optional[str]:
-        """Retrieve cookie encryption key from the peer data bucket."""
-        if not self._peers:
-            return None
-        return self._peers.data[self.app].get(COOKIES_KEY, None)
 
     @property
     def _oauth_client_config(self) -> OauthClientConfig:
-        """OAuth client configuration."""
+        ingress_data = IngressIntegrationData.load(self.ingress_requirer)
         return OauthClientConfig(
-            self._redirect_url,
-            OAUTH_SCOPES,
-            OAUTH_GRANT_TYPES,
+            redirect_uri=str(ingress_data.url / "oauth2" / "callback"),
+            scope=OAUTH_SCOPES,
+            grant_types=OAUTH_GRANT_TYPES,
         )
 
     @property
@@ -213,46 +190,6 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             app_names=auth_proxy_data.app_names,
             headers=auth_proxy_data.headers,
         )
-
-    @property
-    def _oauth2_proxy_pebble_layer(self) -> Layer:
-        """OAuth2 Proxy pebble layer."""
-        proxy_vars = {
-            "HTTP_PROXY": HTTP_PROXY,
-            "HTTPS_PROXY": HTTPS_PROXY,
-            "NO_PROXY": NO_PROXY,
-        }
-
-        context = {
-            "OAUTH2_PROXY_COOKIE_SECRET": self._cookie_encryption_key,
-        }
-
-        for key, env_var in proxy_vars.items():
-            value = os.environ.get(env_var)
-            if value:
-                context.update({key: value})
-
-        layer_config = {
-            "summary": "oauth2 proxy layer",
-            "services": {
-                WORKLOAD_SERVICE: {
-                    "summary": WORKLOAD_SERVICE,
-                    "command": f"/bin/oauth2-proxy --config {CONFIG_FILE_PATH}",
-                    "startup": "enabled",
-                    "override": "replace",
-                    "environment": context,
-                    "on-check-failure": {"up": "ignore"},
-                }
-            },
-            "checks": {
-                "up": {
-                    "override": "replace",
-                    "period": "10s",
-                    "http": {"url": f"http://localhost:{OAUTH2_PROXY_API_PORT}/ready"},
-                }
-            },
-        }
-        return Layer(layer_config)
 
     @property
     def _oauth2_proxy_service_is_running(self) -> bool:
@@ -273,48 +210,10 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         except (KeyError, pebble.ConnectionError):
             return False
 
-    def _render_conf_file(self) -> str:
-        """Render the OAuth2 Proxy configuration file."""
-        oauth_integration = False
-        auth_proxy_data = AuthProxyIntegrationData.load(self.auth_proxy)
-
-        if self.oauth.is_client_created():
-            oauth_provider_info = self.oauth.get_provider_info()
-            oauth_integration = True
-
-        with open("templates/oauth2-proxy.toml.j2", "r") as file:
-            template = Template(file.read())
-
-        rendered = template.render(
-            authenticated_emails_file=ACCESS_LIST_EMAILS_PATH
-            if auth_proxy_data.authenticated_emails
-            else None,
-            authenticated_email_domains=auth_proxy_data.authenticated_email_domains,
-            client_id=oauth_provider_info.client_id if oauth_integration else "default",
-            client_secret=oauth_provider_info.client_secret if oauth_integration else "default",
-            oauth_integration=oauth_integration,
-            oidc_issuer_url=oauth_provider_info.issuer_url if oauth_integration else None,
-            scopes=OAUTH_SCOPES,
-            redirect_url=self._redirect_url,
-            skip_auth_routes=auth_proxy_data.allowed_endpoints,
-            whitelist_domains=self._public_domain,
-            dev=self.config["dev"],
-        )
-        return rendered
-
     @log_event_handler(logger)
     def _on_pebble_ready(self, event: PebbleReadyEvent) -> None:
-        """Handle pebble ready event.
-
-            - open application port
-            - handle status and update config
-            - set workload version.
-
-        Args:
-            event: The event triggered when Pebble is ready for a workload.
-        """
         self.model.unit.open_port(protocol="tcp", port=OAUTH2_PROXY_API_PORT)
-        self._handle_status_update_config(event)
+        self._holistic_handler(event)
 
         if version := self.cli.get_oauth2_proxy_service_version():
             self.unit.set_workload_version(version)
@@ -326,7 +225,7 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         Args:
             event: The event triggered when IngressPerApp is ready.
         """
-        self._handle_status_update_config(event)
+        self._holistic_handler(event)
         if self.unit.is_leader():
             logger.info(f"This app's ingress URL: {event.url}")
             self.oauth.update_client_config(client_config=self._oauth_client_config)
@@ -338,23 +237,24 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         Args:
             event: The event triggered when IngressPerAppRevoked is emitted.
         """
-        self._handle_status_update_config(event)
+        self._holistic_handler(event)
+
         if self.unit.is_leader():
             logger.info("This app no longer has ingress")
             self.oauth.update_client_config(client_config=self._oauth_client_config)
 
     @log_event_handler(logger)
     def _on_trusted_certificates_available(self, event: CertificatesAvailableEvent) -> None:
-        self._handle_status_update_config(event)
+        self._holistic_handler(event)
 
     @log_event_handler(logger)
     def _on_trusted_certificates_removed(self, event: CertificatesRemovedEvent) -> None:
-        self._handle_status_update_config(event)
+        self._holistic_handler(event)
 
     @log_event_handler(logger)
     def _on_config_changed(self, event: ConfigChangedEvent) -> None:
         """Handle config-changed event."""
-        self._handle_status_update_config(event)
+        self._holistic_handler(event)
 
     @log_event_handler(logger)
     def _on_update_status(self, event: UpdateStatusEvent) -> None:
@@ -366,10 +266,10 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         # TODO: Evaluate if this is needed
         valid_pebble_plan = self._validate_pebble_plan()
         if not valid_pebble_plan:
-            self._handle_status_update_config(event)
+            self._holistic_handler(event)
             return
 
-        check = self._container.get_check("up")
+        check = self._container.get_check(PEBBLE_READY_CHECK_NAME)
         if check.status != CheckStatus.UP:
             self.unit.status = MaintenanceStatus("Status check: DOWN")
             return
@@ -381,7 +281,7 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         Args:
             event: The `OAuthInfoChangedEvent` event triggered when integration data changed.
         """
-        self._handle_status_update_config(event)
+        self._holistic_handler(event)
 
     @log_event_handler(logger)
     def _on_invalid_forward_auth_config(self, event: InvalidForwardAuthConfigEvent) -> None:
@@ -408,7 +308,7 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             event.defer()
             return
 
-        self._handle_status_update_config(event)
+        self._holistic_handler(event)
 
         logger.info("Auth-proxy config has changed. Forward-auth relation will be updated")
         self.forward_auth.update_forward_auth_config(self._forward_auth_config)
@@ -416,34 +316,11 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
     @log_event_handler(logger)
     def _remove_auth_proxy_configuration(self, event: AuthProxyConfigRemovedEvent) -> None:
         """Remove the auth-proxy-related config for a given relation."""
-        self._handle_status_update_config(event)
+        self._holistic_handler(event)
         self.forward_auth.update_forward_auth_config(self._forward_auth_config)
 
-    @property
-    def current_config_hash(self) -> Optional[int]:
-        return self._stored.config_hash
-
-    def _restart_service(self, restart: bool = False) -> None:
-        if restart:
-            self._container.restart(WORKLOAD_CONTAINER)
-        elif not self._container.get_service(WORKLOAD_CONTAINER).is_running():
-            self._container.start(WORKLOAD_CONTAINER)
-        else:
-            self._container.replan()
-
-    def _update_config(self) -> None:
-        conf = self._render_conf_file()
-        config_hash = utils.hash(conf)
-        if config_hash == self.current_config_hash:
-            return
-
-        self._container.push(CONFIG_FILE_PATH, conf, make_dirs=True)
-
-        self._stored.config_hash = config_hash
-        self.config_changed = True
-
     @log_event_handler(logger)
-    def _handle_status_update_config(self, event: HookEvent) -> None:
+    def _holistic_handler(self, event: HookEvent) -> None:
         """Update the application status and configuration and restart the container.
 
         Args:
@@ -455,9 +332,6 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting to connect to OAuth2-Proxy container")
             return
 
-        if not self._cookie_encryption_key:
-            self._peers.data[self.app][COOKIES_KEY] = secrets.token_hex(16)
-
         self.unit.status = MaintenanceStatus("Configuring the container")
 
         auth_proxy_data = AuthProxyIntegrationData.load(self.auth_proxy)
@@ -467,17 +341,11 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
 
         self.trusted_cert_transfer.update_trusted_ca_certs()
 
-        self._update_config()
-        self._container.add_layer(
-            WORKLOAD_CONTAINER, self._oauth2_proxy_pebble_layer, combine=True
-        )
-
         try:
-            self._restart_service(restart=self.config_changed)
-        except ChangeError as err:
-            logger.error(str(err))
+            self._pebble_service.plan(self._pebble_layer)
+        except PebbleServiceError:
             self.unit.status = BlockedStatus(
-                "Failed to restart the container, please consult the logs"
+                "Failed to replan the pebble service, please consult the logs"
             )
             return
 
@@ -493,5 +361,5 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         return adjust_resource_requirements(limits, requests, adhere_to_requests=True)
 
 
-if __name__ == "__main__":  # pragma: nocover
-    main.main(Oauth2ProxyK8sOperatorCharm)  # type: ignore
+if __name__ == "__main__":
+    main(Oauth2ProxyK8sOperatorCharm)
