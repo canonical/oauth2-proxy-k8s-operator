@@ -42,14 +42,6 @@ def mocked_container() -> MagicMock:
 
 
 @pytest.fixture()
-def mocked_cookie_encryption_key(mocker: MockerFixture) -> MagicMock:
-    return mocker.patch(
-        "charm.Oauth2ProxyK8sOperatorCharm._cookie_encryption_key",
-        return_value="WrfOcYmVBwyduEbKYTUhO4X7XVaOQ1wF",
-    )
-
-
-@pytest.fixture()
 def mocked_oauth2_proxy_is_running(mocker: MockerFixture) -> MagicMock:
     return mocker.patch(
         "charm.Oauth2ProxyK8sOperatorCharm._oauth2_proxy_service_is_running", return_value=True
