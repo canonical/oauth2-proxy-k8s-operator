@@ -4,7 +4,15 @@
 """Library for the certificate_transfer relation.
 
 This library contains the Requires and Provides classes for handling the
-certificate-transfer interface.
+certificate-transfer interface. It supports both v0 and v1 of the interface.
+
+For requirers, they will set version 1 in their application databag as a hint to
+the provider. They will read the databag from the provider first as v1, and fallback
+to v0 if the format does not match.
+
+For providers, they will check the version in the requirer's application databag,
+and send v1 if that version is set to 1, otherwise it will default to 0 for backwards
+compatibility.
 
 ## Getting Started
 From a charm directory, fetch the library using `charmcraft`:
@@ -116,7 +124,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 7
+LIBPATCH = 12
 
 logger = logging.getLogger(__name__)
 
@@ -283,6 +291,18 @@ class ProviderApplicationData(DatabagModel):
     )
 
 
+class ProviderUnitDataV0(DatabagModel):
+    """Provider Unit databag v0 model."""
+
+    ca: str
+    certificate: str
+    chain: Optional[List[str]] = None
+    version: int = pydantic.Field(
+        description="Version of the interface used in this databag",
+        default=0,
+    )
+
+
 class RequirerApplicationData(DatabagModel):
     """Requirer App databag model."""
 
@@ -315,7 +335,7 @@ class CertificateTransferProvides(Object):
         if not self.charm.unit.is_leader():
             logger.warning("Only the leader unit can add certificates to this relation")
             return
-        relations = self._get_relevant_relations(relation_id)
+        relations = self._get_active_relations(relation_id)
         if not relations:
             logger.warning(
                 "At least 1 matching relation ID not found with the relation name '%s'",
@@ -342,7 +362,7 @@ class CertificateTransferProvides(Object):
         if not self.charm.unit.is_leader():
             logger.warning("Only the leader unit can add certificates to this relation")
             return
-        relations = self._get_relevant_relations(relation_id)
+        relations = self._get_active_relations(relation_id)
         if not relations:
             logger.warning(
                 "At least 1 matching relation ID not found with the relation name '%s'",
@@ -372,7 +392,7 @@ class CertificateTransferProvides(Object):
         if not self.charm.unit.is_leader():
             logger.warning("Only the leader unit can add certificates to this relation")
             return
-        relations = self._get_relevant_relations(relation_id)
+        relations = self._get_active_relations(relation_id)
         if not relations:
             logger.warning(
                 "At least 1 matching relation ID not found with the relation name '%s'",
@@ -385,8 +405,8 @@ class CertificateTransferProvides(Object):
             existing_data.discard(certificate)
             self._set_relation_data(relation, existing_data)
 
-    def _get_relevant_relations(self, relation_id: Optional[int] = None) -> List[Relation]:
-        """Get the relevant relation if relation_id is given, all relations otherwise."""
+    def _get_active_relations(self, relation_id: Optional[int] = None) -> List[Relation]:
+        """Get the relation if relation_id is given and the relation is active, all active relations otherwise."""
         if relation_id is not None:
             relation = self.model.get_relation(
                 relation_name=self.relationship_name, relation_id=relation_id
@@ -395,18 +415,59 @@ class CertificateTransferProvides(Object):
                 return [relation]
             return []
 
-        return list(self.model.relations[self.relationship_name])
+        return [
+            relation
+            for relation in self.model.relations[self.relationship_name]
+            if relation.active
+        ]
 
     def _set_relation_data(self, relation: Relation, data: Set[str]) -> None:
         """Set the given relation data."""
-        databag = relation.data[self.model.app]
-        ProviderApplicationData(certificates=data).dump(databag, False)
+        if relation.data.get(relation.app, {}).get("version", "0") == "1":
+            databag = relation.data[self.model.app]
+            ProviderApplicationData(certificates=data).dump(databag, True)
+        else:
+            if "version" in relation.data.get(relation.app, {}):
+                logger.warning(
+                    (
+                        "Requirer in relation %d is using version %s of the interface,",
+                        "defaulting to version 0.",
+                        "This is deprecated, please consider upgrading the requirer",
+                        "to version 1 of the library.",
+                    ),
+                    relation.id,
+                    relation.data[relation.app]["version"],
+                )
+            else:
+                logger.warning(
+                    (
+                        "Requirer in relation %d did not provide version field,",
+                        "defaulting to version 0.",
+                        "This is deprecated, please consider upgrading the requirer",
+                        "to version 1 of the library.",
+                    ),
+                    relation.id,
+                )
+
+            databag = relation.data[self.model.unit]
+            if data:
+                certificates = list(data)
+                ProviderUnitDataV0(
+                    ca=certificates[0], certificate=certificates[0], chain=certificates
+                ).dump(databag, True)
 
     def _get_relation_data(self, relation: Relation) -> Set[str]:
         """Get the given relation data."""
-        databag = relation.data[self.model.app]
         try:
-            return ProviderApplicationData().load(databag).certificates
+            if relation.data.get(relation.app, {}).get("version", "0") == "1":
+                databag = relation.data[self.model.app]
+                return ProviderApplicationData().load(databag).certificates
+            else:
+                databag = relation.data[self.model.unit]
+                certs = ProviderUnitDataV0.load(databag).chain
+                if certs is None:
+                    return set()
+                return set(certs)
         except DataValidationError as e:
             logger.error(
                 (
@@ -548,7 +609,7 @@ class CertificateTransferRequires(Object):
         Args:
             relation_id: The id of the relation to get the certificates from.
         """
-        relations = self._get_relevant_relations(relation_id)
+        relations = self._get_active_relations(relation_id)
         result = set()
         for relation in relations:
             data = self._get_relation_data(relation)
@@ -566,9 +627,16 @@ class CertificateTransferRequires(Object):
 
     def _get_relation_data(self, relation: Relation) -> Set[str]:
         """Get the given relation data."""
-        databag = relation.data[relation.app]
         try:
-            return ProviderApplicationData().load(databag).certificates
+            databag = relation.data[relation.app]
+            certificates = ProviderApplicationData().load(databag).certificates
+            if not certificates and relation.units:
+                databag = relation.data.get(relation.units.pop(), {})
+                certs = ProviderUnitDataV0.load(databag).chain
+                if certs is None:
+                    return set()
+                return set(certs)
+            return certificates
         except DataValidationError as e:
             logger.error(
                 (
@@ -581,11 +649,15 @@ class CertificateTransferRequires(Object):
             )
             return set()
 
-    def _get_relevant_relations(self, relation_id: Optional[int] = None) -> List[Relation]:
-        """Get the relevant relation if relation_id is given, all relations otherwise."""
+    def _get_active_relations(self, relation_id: Optional[int] = None) -> List[Relation]:
+        """Get the active relation if relation_id is given, all active relations otherwise."""
         if relation_id is not None:
             if relation := self.model.get_relation(
                 relation_name=self.relationship_name, relation_id=relation_id
             ):
                 return [relation]
-        return list(self.model.relations[self.relationship_name])
+        return [
+            relation
+            for relation in self.model.relations[self.relationship_name]
+            if relation.active
+        ]
