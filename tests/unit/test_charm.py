@@ -12,12 +12,11 @@ from typing import Optional, Tuple
 from unittest.mock import MagicMock, Mock
 
 import pytest
-import toml
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 from ops.pebble import CheckStatus
 from ops.testing import Harness
 
-from constants import WORKLOAD_CONTAINER, WORKLOAD_SERVICE
+from constants import OAUTH2_PROXY_API_PORT, WORKLOAD_CONTAINER, WORKLOAD_SERVICE
 
 APP_NAME = "oauth2-proxy-k8s"
 OAUTH_CLIENT_ID = "oauth2_proxy_client_id"
@@ -135,9 +134,7 @@ class TestPebbleReadyEvent:
             "Waiting to connect to OAuth2-Proxy container"
         )
 
-    def test_on_pebble_ready_correct_plan(
-        self, harness: Harness, mocked_cookie_encryption_key: MagicMock
-    ) -> None:
+    def test_on_pebble_ready_correct_plan(self, harness: Harness) -> None:
         harness.set_can_connect(WORKLOAD_CONTAINER, True)
         setup_peer_relation(harness)
         container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
@@ -147,17 +144,29 @@ class TestPebbleReadyEvent:
             "services": {
                 WORKLOAD_SERVICE: {
                     "summary": WORKLOAD_SERVICE,
-                    "command": "/bin/oauth2-proxy --config /etc/config/oauth2-proxy/oauth2-proxy.cfg",
+                    "command": "/bin/oauth2-proxy",
                     "startup": "enabled",
                     "override": "replace",
                     "environment": {
-                        "OAUTH2_PROXY_COOKIE_SECRET": mocked_cookie_encryption_key,
+                        "HTTPS_PROXY": None,
+                        "HTTP_PROXY": None,
+                        "NO_PROXY": None,
+                        "OAUTH2_PROXY_CLIENT_ID": "default",
+                        "OAUTH2_PROXY_CLIENT_SECRET": "default",
+                        "OAUTH2_PROXY_EMAIL_DOMAINS": "*",
+                        "OAUTH2_PROXY_HTTP_ADDRESS": f"0.0.0.0:{OAUTH2_PROXY_API_PORT}",
+                        "OAUTH2_PROXY_REDIRECT_URL": "http://oauth2-proxy-k8s.testing.svc.cluster.local:4180/oauth2/callback",
+                        "OAUTH2_PROXY_REVERSE_PROXY": "true",
+                        "OAUTH2_PROXY_SET_XAUTHREQUEST": "true",
+                        "OAUTH2_PROXY_SSL_INSECURE_SKIP_VERIFY": "false",
+                        "OAUTH2_PROXY_UPSTREAMS": "static://200",
+                        "OAUTH2_PROXY_WHITELIST_DOMAINS": "oauth2-proxy-k8s.testing.svc.cluster.local",
                     },
-                    "on-check-failure": {"up": "ignore"},
+                    "on-check-failure": {"ready": "ignore"},
                 }
             },
             "checks": {
-                "up": {
+                "ready": {
                     "override": "replace",
                     "period": "10s",
                     "http": {"url": "http://localhost:4180/ready"},
@@ -166,22 +175,6 @@ class TestPebbleReadyEvent:
         }
         updated_plan = harness.get_container_pebble_plan(WORKLOAD_CONTAINER).to_dict()
         assert expected_plan == updated_plan
-
-    def test_oauth2_proxy_config_on_pebble_ready(self, harness: Harness) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        setup_peer_relation(harness)
-        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
-        container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
-
-        container_config = container.pull(
-            path="/etc/config/oauth2-proxy/oauth2-proxy.cfg", encoding="utf-8"
-        )
-
-        config = toml.load(container_config)
-        assert config["client_id"] == "default"
-        assert config["client_secret"] == "default"
-        assert config["email_domains"] == "*"
-        assert config["set_xauthrequest"] == "true"
 
     def test_workload_version_set(self, harness: Harness) -> None:
         harness.set_can_connect(WORKLOAD_CONTAINER, True)
@@ -197,14 +190,10 @@ class TestConfigChangedEvent:
         harness.set_can_connect(WORKLOAD_CONTAINER, True)
         setup_peer_relation(harness)
         harness.update_config({"dev": True})
-        container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
 
-        container_config = container.pull(
-            path="/etc/config/oauth2-proxy/oauth2-proxy.cfg", encoding="utf-8"
-        )
-
-        config = toml.load(container_config)
-        assert config["ssl_insecure_skip_verify"] == "true"
+        pebble_plan = harness.get_container_pebble_plan(WORKLOAD_CONTAINER).to_dict()
+        env_vars = pebble_plan["services"][WORKLOAD_SERVICE]["environment"]
+        assert env_vars["OAUTH2_PROXY_SSL_INSECURE_SKIP_VERIFY"] == "true"
 
 
 class TestAuthProxyEvents:
@@ -214,16 +203,15 @@ class TestAuthProxyEvents:
         setup_auth_proxy_relation(harness)
         harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
 
-        container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
-        container_config = container.pull(
-            path="/etc/config/oauth2-proxy/oauth2-proxy.cfg", encoding="utf-8"
+        pebble_plan = harness.get_container_pebble_plan(WORKLOAD_CONTAINER).to_dict()
+        env_vars = pebble_plan["services"][WORKLOAD_SERVICE]["environment"]
+        assert (
+            env_vars["OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE"]
+            == "/etc/config/oauth2-proxy/access_list.cfg"
         )
-        config = toml.load(container_config)
-
-        assert config["authenticated_emails_file"] == "/etc/config/oauth2-proxy/access_list.cfg"
-        assert config["email_domains"] == ["example.com"]
-        assert config["skip_auth_routes"] == ["about/app"]
-        assert config["set_xauthrequest"] == "true"
+        assert env_vars["OAUTH2_PROXY_EMAIL_DOMAINS"] == "example.com"
+        assert env_vars["OAUTH2_PROXY_SKIP_AUTH_ROUTES"] == "about/app"
+        assert env_vars["OAUTH2_PROXY_SET_XAUTHREQUEST"] == "true"
 
     def test_authenticated_emails_file_created_when_auth_proxy_config_provided(
         self, harness: Harness
@@ -315,9 +303,7 @@ class TestUpdateStatusEvent:
 
 
 class TestIngressIntegrationEvents:
-    def test_ingress_relation_created(
-        self, harness: Harness, mocked_cookie_encryption_key: MagicMock
-    ) -> None:
+    def test_ingress_relation_created(self, harness: Harness) -> None:
         harness.set_can_connect(WORKLOAD_CONTAINER, True)
 
         relation_id, url = setup_ingress_relation(harness)
@@ -334,7 +320,6 @@ class TestIngressIntegrationEvents:
     def test_ingress_relation_revoked(
         self,
         harness: Harness,
-        mocked_cookie_encryption_key: MagicMock,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         caplog.set_level(logging.INFO)
@@ -347,9 +332,7 @@ class TestIngressIntegrationEvents:
 
 
 class TestOAuthIntegrationEvents:
-    def test_oauth_relation_requirer_data_sent(
-        self, harness: Harness, mocked_cookie_encryption_key: MagicMock
-    ) -> None:
+    def test_oauth_relation_requirer_data_sent(self, harness: Harness) -> None:
         harness.set_can_connect(WORKLOAD_CONTAINER, True)
         relation_id = setup_oauth_relation(harness)
 
@@ -368,15 +351,11 @@ class TestOAuthIntegrationEvents:
         setup_oauth_relation(harness)
         harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
 
-        container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
-        container_config = container.pull(
-            path="/etc/config/oauth2-proxy/oauth2-proxy.cfg", encoding="utf-8"
-        )
-
-        config = toml.load(container_config)
-        assert config["client_id"] == OAUTH_CLIENT_ID
-        assert config["client_secret"] == OAUTH_CLIENT_SECRET
-        assert config["oidc_issuer_url"] == "https://example.oidc.com"
+        pebble_plan = harness.get_container_pebble_plan(WORKLOAD_CONTAINER).to_dict()
+        env_vars = pebble_plan["services"][WORKLOAD_SERVICE]["environment"]
+        assert env_vars["OAUTH2_PROXY_CLIENT_ID"] == OAUTH_CLIENT_ID
+        assert env_vars["OAUTH2_PROXY_CLIENT_SECRET"] == OAUTH_CLIENT_SECRET
+        assert env_vars["OAUTH2_PROXY_OIDC_ISSUER_URL"] == "https://example.oidc.com"
 
 
 class TestTrustedCertificatesTransferIntegration:
