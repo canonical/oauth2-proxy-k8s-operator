@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, Mock
 import pytest
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 from ops.pebble import CheckStatus
-from ops.testing import Harness
+from ops.testing import ActionFailed, Harness
 
 from constants import OAUTH2_PROXY_API_PORT, WORKLOAD_CONTAINER, WORKLOAD_SERVICE
 
@@ -380,3 +380,59 @@ class TestTrustedCertificatesTransferIntegration:
         harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
 
         mocked_update.assert_called_once()
+
+
+class TestEnableExtraJWTBearerTokens:
+    def test_enable_extra_jwt_bearer_tokens(
+        self, harness: Harness, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        setup_peer_relation(harness)
+        setup_oauth_relation(harness)
+        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+
+        harness.update_config({"enable_jwt_bearer_tokens": True})
+
+        pebble_plan = harness.get_container_pebble_plan(WORKLOAD_CONTAINER).to_dict()
+        env_vars = pebble_plan["services"][WORKLOAD_SERVICE]["environment"]
+
+        assert env_vars["OAUTH2_PROXY_SKIP_JWT_BEARER_TOKENS"] == "true"
+        assert env_vars["OAUTH2_PROXY_EXTRA_JWT_ISSUERS"] == (
+            "${OAUTH2_PROXY_OIDC_ISSUER_URL}=${OAUTH2_PROXY_CLIENT_ID}"
+        )
+        assert env_vars["OAUTH2_PROXY_BEARER_TOKEN_LOGIN_FALLBACK"] == "false"
+        assert env_vars["OAUTH2_PROXY_EMAIL_DOMAINS"] == "*"
+
+
+class TestGetExtraJWTIssuers:
+    action_name = "get-extra-jwt-issuers"
+
+    def test_get_extra_jwt_issuers(
+        self, harness: Harness, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        setup_peer_relation(harness)
+        setup_oauth_relation(harness)
+        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+
+        harness.update_config({"enable_jwt_bearer_tokens": True})
+
+        output = harness.run_action(self.action_name)
+
+        extra_jwt_issuers_list = output.results["extra-jwt-issuers"]
+
+        assert len(extra_jwt_issuers_list) == 1
+        assert extra_jwt_issuers_list[0]["oidc-issuer-url"] == "https://example.oidc.com"
+
+        assert extra_jwt_issuers_list[0]["audience"] == OAUTH_CLIENT_ID
+
+    def test_get_extra_jwt_issuers_when_not_enabled(
+        self, harness: Harness, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        setup_peer_relation(harness)
+        setup_oauth_relation(harness)
+        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+
+        with pytest.raises(ActionFailed):
+            harness.run_action(self.action_name)

@@ -36,7 +36,14 @@ from charms.traefik_k8s.v2.ingress import (
     IngressPerAppRevokedEvent,
 )
 from ops import main, pebble
-from ops.charm import CharmBase, ConfigChangedEvent, HookEvent, PebbleReadyEvent, UpdateStatusEvent
+from ops.charm import (
+    ActionEvent,
+    CharmBase,
+    ConfigChangedEvent,
+    HookEvent,
+    PebbleReadyEvent,
+    UpdateStatusEvent,
+)
 from ops.model import (
     ActiveStatus,
     BlockedStatus,
@@ -156,6 +163,11 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             self.auth_proxy.on.config_removed, self._remove_auth_proxy_configuration
         )
 
+        self.framework.observe(
+            self.on.get_extra_jwt_issuers_action,
+            self._on_get_extra_jwt_issuers,
+        )
+
     @property
     def _pebble_layer(self) -> Layer:
         ingress_data = IngressIntegrationData.load(self.ingress_requirer)
@@ -163,10 +175,10 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         auth_proxy_data = AuthProxyIntegrationData.load(self.auth_proxy)
 
         return self._pebble_service.render_pebble_layer(
-            self.charm_config,
             ingress_data,
             oauth_data,
             auth_proxy_data,
+            self.charm_config,
             self.peer_data,
         )
 
@@ -359,6 +371,30 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         limits = {"cpu": self.model.config.get("cpu"), "memory": self.model.config.get("memory")}
         requests = {"cpu": "100m", "memory": "200Mi"}
         return adjust_resource_requirements(limits, requests, adhere_to_requests=True)
+
+    def _on_get_extra_jwt_issuers(self, event: ActionEvent) -> None:
+        if not self.unit.is_leader():
+            return event.fail("Unit is not the leader")
+
+        if not self.charm_config["enable_jwt_bearer_tokens"]:
+            return event.fail("`enable_jwt_bearer_tokens` is not enabled")
+
+        issuer_url = self._pebble_layer.services[WORKLOAD_SERVICE].environment.get(
+            "OAUTH2_PROXY_OIDC_ISSUER_URL"
+        )
+        if not issuer_url:
+            return event.fail("The issuer URL is not set")
+
+        client_id = self._pebble_layer.services[WORKLOAD_SERVICE].environment.get(
+            "OAUTH2_PROXY_CLIENT_ID"
+        )
+        if not client_id:
+            return event.fail("The client ID is not set")
+
+        event.set_results({
+            "extra-jwt-issuers": [{"oidc-issuer-url": issuer_url, "audience": client_id}]
+        })
+        return None
 
 
 if __name__ == "__main__":
