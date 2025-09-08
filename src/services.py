@@ -73,6 +73,11 @@ class PebbleService:
             **updated_env_vars,
         }
 
+        if env_vars.get("OAUTH2_PROXY_SKIP_JWT_BEARER_TOKENS") == "true":
+            env_vars["OAUTH2_PROXY_EXTRA_JWT_ISSUERS"] = (
+                f"{env_vars['OAUTH2_PROXY_OIDC_ISSUER_URL']}={env_vars['OAUTH2_PROXY_CLIENT_ID']}"
+            )
+
         self._layer_dict["services"][WORKLOAD_SERVICE]["environment"] = env_vars
 
         return Layer(self._layer_dict)

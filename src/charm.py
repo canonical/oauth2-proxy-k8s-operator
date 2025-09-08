@@ -175,10 +175,10 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         auth_proxy_data = AuthProxyIntegrationData.load(self.auth_proxy)
 
         return self._pebble_service.render_pebble_layer(
+            self.charm_config,
             ingress_data,
             oauth_data,
             auth_proxy_data,
-            self.charm_config,
             self.peer_data,
         )
 
