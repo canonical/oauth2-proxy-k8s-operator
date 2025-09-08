@@ -49,6 +49,16 @@ config:
         automatically deduced from it).
         See https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
       type: string
+    enable_jwt_bearer_tokens:
+      description: |
+        If set to `True`, OAuth2 Proxy will allow requests that have verified JWT bearer tokens.
+      type: boolean
+      default: False
+
+actions:
+  get-extra-jwt-issuers:
+    description: |
+      Get the list of OIDC issuers URLs and their audiences used to validate JWT tokens when `enable_jwt_bearer_tokens=true`.
 
 # Metadata
 requires:
