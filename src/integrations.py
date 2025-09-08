@@ -54,7 +54,6 @@ class PeerData:
                 return s  # return raw string if it's not valid JSON
 
         value = peers.data[self._app].get(key)
-        logger.error(f"KEY: {key}, VALUE: {value}")
         return _safe_load(value) if value is not None else None
 
     def __setitem__(self, key: str, value: Any) -> None:

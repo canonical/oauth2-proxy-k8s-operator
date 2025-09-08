@@ -398,7 +398,7 @@ class TestEnableExtraJWTBearerTokens:
 
         assert env_vars["OAUTH2_PROXY_SKIP_JWT_BEARER_TOKENS"] == "true"
         assert env_vars["OAUTH2_PROXY_EXTRA_JWT_ISSUERS"] == (
-            "${OAUTH2_PROXY_OIDC_ISSUER_URL}=${OAUTH2_PROXY_CLIENT_ID}"
+            f"{OAUTH_PROVIDER_INFO['issuer_url']}={OAUTH_CLIENT_ID}"
         )
         assert env_vars["OAUTH2_PROXY_BEARER_TOKEN_LOGIN_FALLBACK"] == "false"
         assert env_vars["OAUTH2_PROXY_EMAIL_DOMAINS"] == "*"

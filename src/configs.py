@@ -26,9 +26,6 @@ class CharmConfig:
 
         if self._config["enable_jwt_bearer_tokens"]:
             env_vars["OAUTH2_PROXY_SKIP_JWT_BEARER_TOKENS"] = "true"
-            env_vars["OAUTH2_PROXY_EXTRA_JWT_ISSUERS"] = (
-                "${OAUTH2_PROXY_OIDC_ISSUER_URL}=${OAUTH2_PROXY_CLIENT_ID}"
-            )
             env_vars["OAUTH2_PROXY_BEARER_TOKEN_LOGIN_FALLBACK"] = "false"
             env_vars["OAUTH2_PROXY_EMAIL_DOMAINS"] = "*"
 
