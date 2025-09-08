@@ -47,8 +47,15 @@ class PeerData:
         if not (peers := self._model.get_relation(PEER_INTEGRATION_NAME)):
             return None
 
+        def _safe_load(s):
+            try:
+                return json.loads(s)
+            except json.JSONDecodeError:
+                return s  # return raw string if it's not valid JSON
+
         value = peers.data[self._app].get(key)
-        return json.loads(value) if value is not None else None
+        logger.error(f"KEY: {key}, VALUE: {value}")
+        return _safe_load(value) if value is not None else None
 
     def __setitem__(self, key: str, value: Any) -> None:
         if not (peers := self._model.get_relation(PEER_INTEGRATION_NAME)):
