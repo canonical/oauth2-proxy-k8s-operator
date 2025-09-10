@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.0.0](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v1.1.4...v2.0.0) (2025-09-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* use environment variables instead of configuration file
+
+### Bug Fixes
+
+* update charm dependent libs ([ebc24cd](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/ebc24cd84d6270b4134c2f875af00818a3a78fed))
+
+
+### Code Refactoring
+
+* use environment variables instead of configuration file ([e3169ab](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/e3169ab3dab4711e2d6ae2d5663f6799bad82bc9))
+
 ## [1.1.4](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v1.1.3...v1.1.4) (2025-08-15)
 
 
