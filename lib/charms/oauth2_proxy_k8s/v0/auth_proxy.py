@@ -383,9 +383,9 @@ class AuthProxyProvider(AuthProxyRelation):
             return None
 
         relations_data = set()
-        for relation in self._charm.model.relations[self._relation_name]:
-            if relation.data[relation.app]:
-                if values := json.loads(relation.data[relation.app][key]):
+        for relation in self._charm.model.relations.get(self._relation_name, []):
+            if relation.data.get(relation.app, None):
+                if values := json.loads(relation.data[relation.app].get(key, "[]")):
                     for v in values:
                         relations_data.add(v)
                 else:
