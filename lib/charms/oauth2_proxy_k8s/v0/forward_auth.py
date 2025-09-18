@@ -67,7 +67,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 1
+LIBPATCH = 2
 
 RELATION_NAME = "forward-auth"
 INTERFACE_NAME = "forward_auth"
@@ -192,10 +192,12 @@ class ForwardAuthRequirerConfig:
     Its purpose is to evaluate whether apps can be protected by IAP.
     """
 
-    ingress_app_names: List[str] = field(default_factory=lambda: [])
+    ingress_app_names: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict:
-        """Convert object to dict."""
+    def __post_init__(self) -> None:
+        self.ingress_app_names = list(dict.fromkeys(self.ingress_app_names))
+
+    def to_dict(self) -> dict:
         return {k: v for k, v in asdict(self).items() if v is not None}
 
 
@@ -593,4 +595,3 @@ class ForwardAuthProvider(ForwardAuthRelation):
     ) -> None:
         """Update the forward-auth config stored in the object."""
         self._update_relation_data(forward_auth_config, relation_id=relation_id)
-
