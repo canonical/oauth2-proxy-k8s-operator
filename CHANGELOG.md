@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.0.0](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v1.1.4...v2.0.0) (2025-09-18)
+
+
+### ⚠ BREAKING CHANGES
+
+* use environment variables instead of configuration file
+
+### Bug Fixes
+
+* add a protection to remove duplicated ingressed app names in the requirer databag ([129d716](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/129d7167e54d649ac09f1467248e8ce9f7df7726))
+* add a protection to remove duplicated ingressed app names in the requirer databag ([20c519f](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/20c519f97d0315fb4181fb015668e0e0e9a1c999))
+* update charm dependent libs ([ebc24cd](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/ebc24cd84d6270b4134c2f875af00818a3a78fed))
+
+
+### Code Refactoring
+
+* use environment variables instead of configuration file ([e3169ab](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/e3169ab3dab4711e2d6ae2d5663f6799bad82bc9))
+
 ## [1.1.4](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v1.1.3...v1.1.4) (2025-08-15)
 
 
