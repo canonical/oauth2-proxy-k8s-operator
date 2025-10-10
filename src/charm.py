@@ -344,6 +344,15 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting to connect to OAuth2-Proxy container")
             return
 
+        if self.charm_config["enable_jwt_bearer_tokens"] and not self.oauth.is_client_created():
+            logger.warning(
+                "The config `enable_jwt_bearer_tokens` is enabled, please connect the `oauth` integration."
+            )
+            self.unit.status = BlockedStatus(
+                "Please connect the `oauth` integration or disable the `enable_jwt_bearer_tokens` config."
+            )
+            return
+
         self.unit.status = MaintenanceStatus("Configuring the container")
 
         auth_proxy_data = AuthProxyIntegrationData.load(self.auth_proxy)
