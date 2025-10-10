@@ -382,8 +382,10 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         return adjust_resource_requirements(limits, requests, adhere_to_requests=True)
 
     def _on_get_extra_jwt_issuers(self, event: ActionEvent) -> None:
-        if not self.unit.is_leader():
-            return event.fail("Unit is not the leader")
+        if not self._oauth2_proxy_service_is_running:
+            return event.fail(
+                "Service is not ready. Please re-run the action when the charm is active"
+            )
 
         if not self.charm_config["enable_jwt_bearer_tokens"]:
             return event.fail("`enable_jwt_bearer_tokens` is not enabled")
@@ -400,10 +402,9 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         if not client_id:
             return event.fail("The client ID is not set")
 
-        event.set_results({
+        return event.set_results({
             "extra-jwt-issuers": [{"oidc-issuer-url": issuer_url, "audience": client_id}]
         })
-        return None
 
 
 if __name__ == "__main__":
