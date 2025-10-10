@@ -372,7 +372,7 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         requests = {"cpu": "100m", "mem": "200Mi"}
         return adjust_resource_requirements(limits, requests, adhere_to_requests=True)
 
-    def _on_get_extra_jwt_issuers(self, event: ActionEvent):
+    def _on_get_extra_jwt_issuers(self, event: ActionEvent) -> None:
         if not self.unit.is_leader():
             return event.fail("Unit is not the leader")
 
