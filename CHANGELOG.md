@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.1](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.0.0...v2.0.1) (2025-10-11)
+
+
+### Bug Fixes
+
+* pass valid memory key to KubernetesComputeResourcesPatch ([30b42d1](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/30b42d1e2563a25a634a4ffcc479589f260c11f5))
+* pass valid memory key to KubernetesComputeResourcesPatch ([6a5b3ac](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/6a5b3acb39cba7899193dd92e11b55e673106e08))
+
 ## [2.0.0](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v1.1.4...v2.0.0) (2025-09-18)
 
 
