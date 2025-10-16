@@ -36,7 +36,14 @@ from charms.traefik_k8s.v2.ingress import (
     IngressPerAppRevokedEvent,
 )
 from ops import main, pebble
-from ops.charm import CharmBase, ConfigChangedEvent, HookEvent, PebbleReadyEvent, UpdateStatusEvent
+from ops.charm import (
+    ActionEvent,
+    CharmBase,
+    ConfigChangedEvent,
+    HookEvent,
+    PebbleReadyEvent,
+    UpdateStatusEvent,
+)
 from ops.model import (
     ActiveStatus,
     BlockedStatus,
@@ -154,6 +161,11 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         )
         self.framework.observe(
             self.auth_proxy.on.config_removed, self._remove_auth_proxy_configuration
+        )
+
+        self.framework.observe(
+            self.on.get_extra_jwt_issuers_action,
+            self._on_get_extra_jwt_issuers,
         )
 
     @property
@@ -332,6 +344,15 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting to connect to OAuth2-Proxy container")
             return
 
+        if self.charm_config["enable_jwt_bearer_tokens"] and not self.oauth.is_client_created():
+            logger.warning(
+                "The config `enable_jwt_bearer_tokens` is enabled, please connect the `oauth` integration."
+            )
+            self.unit.status = BlockedStatus(
+                "Please connect the `oauth` integration or disable the `enable_jwt_bearer_tokens` config."
+            )
+            return
+
         self.unit.status = MaintenanceStatus("Configuring the container")
 
         auth_proxy_data = AuthProxyIntegrationData.load(self.auth_proxy)
@@ -359,6 +380,31 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
         limits = {"cpu": self.model.config.get("cpu"), "memory": self.model.config.get("memory")}
         requests = {"cpu": "100m", "memory": "200Mi"}
         return adjust_resource_requirements(limits, requests, adhere_to_requests=True)
+
+    def _on_get_extra_jwt_issuers(self, event: ActionEvent) -> None:
+        if not self._oauth2_proxy_service_is_running:
+            return event.fail(
+                "Service is not ready. Please re-run the action when the charm is active"
+            )
+
+        if not self.charm_config["enable_jwt_bearer_tokens"]:
+            return event.fail("`enable_jwt_bearer_tokens` is not enabled")
+
+        issuer_url = self._pebble_layer.services[WORKLOAD_SERVICE].environment.get(
+            "OAUTH2_PROXY_OIDC_ISSUER_URL"
+        )
+        if not issuer_url:
+            return event.fail("The issuer URL is not set")
+
+        client_id = self._pebble_layer.services[WORKLOAD_SERVICE].environment.get(
+            "OAUTH2_PROXY_CLIENT_ID"
+        )
+        if not client_id:
+            return event.fail("The client ID is not set")
+
+        return event.set_results({
+            "extra-jwt-issuers": [{"oidc-issuer-url": issuer_url, "audience": client_id}]
+        })
 
 
 if __name__ == "__main__":
