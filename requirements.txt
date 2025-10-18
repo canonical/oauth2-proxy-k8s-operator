@@ -1,6 +1,6 @@
 ops ~=3.0
 jsonschema
-pydantic==2.12.2
+pydantic==2.12.3
 tenacity==9.1.2
 lightkube
 lightkube-models
