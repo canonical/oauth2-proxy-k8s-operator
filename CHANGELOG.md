@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.1.0](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.0.0...v2.1.0) (2025-12-06)
+
+
+### Features
+
+* **jwt-bearer-token:** enable JWT bearer token handle by the ([341d98c](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/341d98cde2b707d450269b52fb5f4b5c8dd03d3e))
+
+
+### Bug Fixes
+
+* enable_jwt_bearer_token without oauth2 integration connected result in BlockedStatus ([d5f9821](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/d5f9821ce6b1b8ad96567a30f611a73f1754f7e2))
+* **get_extra_jwt_bearer_token:** only run if the service is running ([d3c183a](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/d3c183a9a8d8024294f1b683f70eed8c78233242))
+* **integration:** temporary fix ([9e90615](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/9e90615b135f5092612f0fc731cd9c12e38c74f9))
+* pass valid memory key to KubernetesComputeResourcesPatch ([30b42d1](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/30b42d1e2563a25a634a4ffcc479589f260c11f5))
+* pass valid memory key to KubernetesComputeResourcesPatch ([6a5b3ac](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/6a5b3acb39cba7899193dd92e11b55e673106e08))
+* remove the legacy related safe_load ([335d649](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/335d649e0e41a07a76dc91fea84acd15d5a35034))
+* search & replace env vars ([097d1ad](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/097d1ad9991d2d9a23e32e4c149851c7038c02fb))
+
 ## [2.0.0](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v1.1.4...v2.0.0) (2025-09-18)
 
 
