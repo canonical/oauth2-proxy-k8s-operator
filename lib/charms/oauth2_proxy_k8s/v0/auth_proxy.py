@@ -82,7 +82,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 3
 
 RELATION_NAME = "auth-proxy"
 INTERFACE_NAME = "auth_proxy"
@@ -372,8 +372,8 @@ class AuthProxyProvider(AuthProxyRelation):
 
         app_names = []
         for relation in self._charm.model.relations[self._relation_name]:
-            if relation.data[relation.app]:
-                app_names.append(relation.data[relation.app]["app_name"])
+            if relation.app:
+                app_names.append(relation.data[relation.app].get("app_name", relation.app.name))
 
         return app_names
 
