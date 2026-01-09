@@ -157,3 +157,6 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# Libraries copied into tester charm
+tests/integration/auth-proxy-requirer/lib/
