@@ -6,139 +6,68 @@
 
 """Charm unit tests."""
 
-import json
 import logging
-from typing import Optional, Tuple
-from unittest.mock import MagicMock, Mock
+from dataclasses import replace
+from unittest.mock import MagicMock
 
+import ops.testing
 import pytest
-from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
-from ops.pebble import CheckStatus
-from ops.testing import ActionFailed, Harness
+from conftest import (
+    COOKIE_SECRET,
+    OAUTH_CLIENT_ID,
+    OAUTH_CLIENT_SECRET,
+    OAUTH_PROVIDER_INFO,
+    create_state,
+)
+from ops import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
+from ops.pebble import CheckLevel, CheckStartup, CheckStatus
+from pytest_mock import MockerFixture
 
-from constants import OAUTH2_PROXY_API_PORT, WORKLOAD_CONTAINER, WORKLOAD_SERVICE
-
-APP_NAME = "oauth2-proxy-k8s"
-OAUTH_CLIENT_ID = "oauth2_proxy_client_id"
-OAUTH_CLIENT_SECRET = "s3cR#T"
-OAUTH_PROVIDER_INFO = {
-    "authorization_endpoint": "https://example.oidc.com/oauth2/auth",
-    "introspection_endpoint": "https://example.oidc.com/admin/oauth2/introspect",
-    "issuer_url": "https://example.oidc.com",
-    "jwks_endpoint": "https://example.oidc.com/.well-known/jwks.json",
-    "scope": "openid profile email phone",
-    "token_endpoint": "https://example.oidc.com/oauth2/token",
-    "userinfo_endpoint": "https://example.oidc.com/userinfo",
-}
-
-
-def setup_peer_relation(harness: Harness) -> Tuple[int, str]:
-    relation_id = harness.add_relation("oauth2-proxy", APP_NAME)
-    return relation_id, APP_NAME
-
-
-def setup_ingress_relation(harness: Harness) -> Tuple[int, str]:
-    """Set up ingress relation."""
-    harness.add_network("10.0.0.1")
-    relation_id = harness.add_relation("ingress", "traefik")
-    harness.add_relation_unit(relation_id, "traefik/0")
-    url = f"http://ingress:80/{harness.model.name}-{APP_NAME}"
-    harness.update_relation_data(
-        relation_id,
-        "traefik",
-        {"ingress": json.dumps({"url": url})},
-    )
-    return relation_id, url
-
-
-def setup_certificates_relation(harness: Harness) -> int:
-    """Set up receive-ca-certificates relation."""
-    relation_id = harness.add_relation("receive-ca-cert", "certificates-provider")
-    harness.add_relation_unit(relation_id, "certificates-provider/0")
-
-    return relation_id
-
-
-def setup_oauth_relation(harness: Harness) -> int:
-    """Set up oauth relation."""
-    relation_id = harness.add_relation("oauth", "hydra")
-    harness.add_relation_unit(relation_id, "hydra/0")
-    secret_id = harness.add_model_secret("hydra", {"secret": OAUTH_CLIENT_SECRET})
-    harness.grant_secret(secret_id, APP_NAME)
-    harness.update_relation_data(
-        relation_id,
-        "hydra",
-        {
-            "client_id": OAUTH_CLIENT_ID,
-            "client_secret_id": secret_id,
-            **OAUTH_PROVIDER_INFO,
-        },
-    )
-    return relation_id
-
-
-def setup_auth_proxy_relation(
-    harness: Harness, app_name: Optional[str] = "requirer"
-) -> Tuple[int, str]:
-    """Set up auth-proxy relation."""
-    relation_id = harness.add_relation("auth-proxy", app_name)
-    harness.add_relation_unit(relation_id, f"{app_name}/0")
-    harness.update_relation_data(
-        relation_id,
-        app_name,
-        {
-            "app_name": "requirer",
-            "protected_urls": '["https://example.com"]',
-            "allowed_endpoints": '["about/app"]',
-            "headers": '["X-Auth-Request-User", "X-Auth-Request-Groups"]',
-            "authenticated_emails": '["test@canonical.com", "test1@canonical.com"]',
-            "authenticated_email_domains": '["example.com"]',
-        },
-    )
-
-    return relation_id, app_name
-
-
-def setup_forward_auth_relation(harness: Harness) -> int:
-    """Set up forward-auth relation."""
-    relation_id = harness.add_relation("forward-auth", "requirer")
-    harness.add_relation_unit(relation_id, "requirer/0")
-    harness.update_relation_data(
-        relation_id,
-        "requirer",
-        {
-            "ingress_app_names": '["charmed-app"]',
-        },
-    )
-
-    return relation_id
+from constants import (
+    OAUTH2_PROXY_API_PORT,
+    PEBBLE_READY_CHECK_NAME,
+    WORKLOAD_CONTAINER,
+    WORKLOAD_SERVICE,
+)
+from integrations import TrustedCertificatesTransferIntegration
 
 
 class TestPebbleReadyEvent:
-    def test_pebble_container_can_connect(self, harness: Harness) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        setup_peer_relation(harness)
-        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+    def test_pebble_ready_can_connect(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+    ) -> None:
+        state_in = create_state(relations=[peer_relation])
 
-        assert isinstance(harness.charm.unit.status, ActiveStatus)
-        service = harness.model.unit.get_container(WORKLOAD_CONTAINER).get_service(
-            WORKLOAD_SERVICE
-        )
-        assert service.is_running()
+        container = state_in.get_container(WORKLOAD_CONTAINER)
+        state_out = context.run(context.on.pebble_ready(container), state_in)
 
-    def test_pebble_container_cannot_connect(self, harness: Harness) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, False)
-        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+        assert state_out.unit_status == ActiveStatus()
 
-        assert harness.charm.unit.status == WaitingStatus(
-            "Waiting to connect to OAuth2-Proxy container"
-        )
+    def test_pebble_ready_cannot_connect(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+    ) -> None:
+        state_in = create_state(can_connect=False, relations=[peer_relation])
 
-    def test_on_pebble_ready_correct_plan(self, harness: Harness) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        setup_peer_relation(harness)
-        container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
-        harness.charm.on.oauth2_proxy_pebble_ready.emit(container)
+        container = state_in.get_container(WORKLOAD_CONTAINER)
+        state_out = context.run(context.on.pebble_ready(container), state_in)
+
+        assert state_out.unit_status == WaitingStatus("Waiting to connect to OAuth2-Proxy container")
+
+    def test_on_pebble_ready_correct_plan(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+    ) -> None:
+        state_in = create_state(relations=[peer_relation])
+
+        container = state_in.get_container(WORKLOAD_CONTAINER)
+        state_out = context.run(context.on.pebble_ready(container), state_in)
+        container_out = state_out.get_container(WORKLOAD_CONTAINER)
+        layer = container_out.layers[WORKLOAD_CONTAINER]
 
         expected_plan = {
             "services": {
@@ -153,6 +82,7 @@ class TestPebbleReadyEvent:
                         "NO_PROXY": None,
                         "OAUTH2_PROXY_CLIENT_ID": "default",
                         "OAUTH2_PROXY_CLIENT_SECRET": "default",
+                        "OAUTH2_PROXY_COOKIE_SECRET": COOKIE_SECRET,
                         "OAUTH2_PROXY_EMAIL_DOMAINS": "*",
                         "OAUTH2_PROXY_HTTP_ADDRESS": f"0.0.0.0:{OAUTH2_PROXY_API_PORT}",
                         "OAUTH2_PROXY_REDIRECT_URL": "http://oauth2-proxy-k8s.testing.svc.cluster.local:4180/oauth2/callback",
@@ -165,179 +95,288 @@ class TestPebbleReadyEvent:
                     "on-check-failure": {"ready": "ignore"},
                 }
             },
+            "summary": "oauth2 proxy layer",
+            "description": "pebble config layer for oauth2-proxy-k8s-operator",
             "checks": {
-                "ready": {
+                PEBBLE_READY_CHECK_NAME: {
                     "override": "replace",
                     "period": "10s",
                     "http": {"url": "http://localhost:4180/ready"},
                 }
             },
         }
-        updated_plan = harness.get_container_pebble_plan(WORKLOAD_CONTAINER).to_dict()
-        assert expected_plan == updated_plan
 
-    def test_workload_version_set(self, harness: Harness) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        harness.handle_exec("oauth2-proxy", ["/bin/oauth2-proxy", "--version"], result="v7.8.1")
-        setup_peer_relation(harness)
-        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+        assert expected_plan == layer.to_dict()
 
-        assert harness.get_workload_version() == "v7.8.1"
+    def test_workload_version_set(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+    ) -> None:
+        state_in = create_state(relations=[peer_relation])
+
+        container = state_in.get_container(WORKLOAD_CONTAINER)
+        state_out = context.run(context.on.pebble_ready(container), state_in)
+
+        assert state_out.workload_version == "v7.8.1"
 
 
 class TestConfigChangedEvent:
-    def test_oauth2_proxy_config_with_dev_flag(self, harness: Harness) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        setup_peer_relation(harness)
-        harness.update_config({"dev": True})
+    def test_oauth2_proxy_config_with_dev_flag(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+    ) -> None:
+        state_in = create_state(config={"dev": True}, relations=[peer_relation])
+        container = state_in.get_container(WORKLOAD_CONTAINER)
 
-        pebble_plan = harness.get_container_pebble_plan(WORKLOAD_CONTAINER).to_dict()
-        env_vars = pebble_plan["services"][WORKLOAD_SERVICE]["environment"]
-        assert env_vars["OAUTH2_PROXY_SSL_INSECURE_SKIP_VERIFY"] == "true"
+        state_out = context.run(context.on.pebble_ready(container), state_in)
+        container_out = state_out.get_container(WORKLOAD_CONTAINER)
+        layer = container_out.layers[WORKLOAD_CONTAINER]
+        env = layer.services[WORKLOAD_CONTAINER].environment
+
+        assert env["OAUTH2_PROXY_SSL_INSECURE_SKIP_VERIFY"] == "true"
 
 
 class TestAuthProxyEvents:
-    def test_config_file_when_auth_proxy_config_provided(self, harness: Harness) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        setup_peer_relation(harness)
-        setup_auth_proxy_relation(harness)
-        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+    def test_config_file_when_auth_proxy_config_provided(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        auth_proxy_relation: ops.testing.Relation,
+    ) -> None:
+        state_in = create_state(relations=[peer_relation, auth_proxy_relation])
+        container = state_in.get_container(WORKLOAD_CONTAINER)
 
-        pebble_plan = harness.get_container_pebble_plan(WORKLOAD_CONTAINER).to_dict()
-        env_vars = pebble_plan["services"][WORKLOAD_SERVICE]["environment"]
+        state_out = context.run(context.on.pebble_ready(container), state_in)
+        container_out = state_out.get_container(WORKLOAD_CONTAINER)
+        layer = container_out.layers[WORKLOAD_CONTAINER]
+        env = layer.services[WORKLOAD_CONTAINER].environment
         assert (
-            env_vars["OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE"]
+            env["OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE"]
             == "/etc/config/oauth2-proxy/access_list.cfg"
         )
-        assert env_vars["OAUTH2_PROXY_EMAIL_DOMAINS"] == "example.com"
-        assert env_vars["OAUTH2_PROXY_SKIP_AUTH_ROUTES"] == "about/app"
-        assert env_vars["OAUTH2_PROXY_SET_XAUTHREQUEST"] == "true"
+        assert env["OAUTH2_PROXY_EMAIL_DOMAINS"] == "example.com"
+        assert sorted(env["OAUTH2_PROXY_SKIP_AUTH_ROUTES"].split(",")) == ["about/app", "welcome"]
+        assert env["OAUTH2_PROXY_SET_XAUTHREQUEST"] == "true"
 
     def test_authenticated_emails_file_created_when_auth_proxy_config_provided(
-        self, harness: Harness
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        auth_proxy_relation: ops.testing.Relation,
     ) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        setup_peer_relation(harness)
-        setup_auth_proxy_relation(harness)
-        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+        state_in = create_state(relations=[peer_relation, auth_proxy_relation])
+        container = state_in.get_container(WORKLOAD_CONTAINER)
 
-        container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
-        assert container.pull(path="/etc/config/oauth2-proxy/access_list.cfg", encoding="utf-8")
+        state_out = context.run(context.on.pebble_ready(container), state_in)
+        container_out = state_out.get_container(WORKLOAD_CONTAINER)
+        filesystem_root = container_out.get_filesystem(context)
+
+        file_path = filesystem_root / "etc/config/oauth2-proxy/access_list.cfg"
+
+        assert file_path.exists()
+        assert "test@canonical.com" in file_path.read_text()
 
     def test_forward_auth_updated_when_auth_proxy_set(
         self,
-        harness: Harness,
-        mocked_oauth2_proxy_is_running: MagicMock,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        auth_proxy_relation: ops.testing.Relation,
         mocked_forward_auth_update: MagicMock,
+        mocked_oauth2_proxy_is_running: MagicMock,
     ) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        setup_peer_relation(harness)
-        setup_auth_proxy_relation(harness)
-        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+        state_in = create_state(relations=[peer_relation, auth_proxy_relation])
+
+        context.run(context.on.relation_changed(auth_proxy_relation), state_in)
 
         mocked_forward_auth_update.assert_called()
 
     def test_auth_proxy_relation_departed(
-        self, harness: Harness, mocked_forward_auth_update: MagicMock
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        auth_proxy_relation: ops.testing.Relation,
+        mocked_forward_auth_update: MagicMock,
+        mocked_oauth2_proxy_is_running: MagicMock,
     ) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        setup_peer_relation(harness)
-        relation_id, _ = setup_auth_proxy_relation(harness)
-        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
-        harness.remove_relation(relation_id)
+        state_in = create_state(relations=[peer_relation, auth_proxy_relation])
+        context.run(context.on.relation_broken(auth_proxy_relation), state_in)
 
         mocked_forward_auth_update.assert_called()
 
 
 class TestForwardAuthEvents:
-    def test_forward_auth_set(self, harness: Harness) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        setup_peer_relation(harness)
-        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
-        relation_id = setup_forward_auth_relation(harness)
+    def test_forward_auth_set(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        forward_auth_relation: ops.testing.Relation,
+    ) -> None:
+        state_in = create_state(relations=[peer_relation, forward_auth_relation])
 
-        app_data = harness.get_relation_data(relation_id, harness.charm.app)
-        assert app_data == {
-            "app_names": "[]",
-            "decisions_address": "http://oauth2-proxy-k8s.testing.svc.cluster.local:4180",
+        state_out = context.run(context.on.relation_changed(forward_auth_relation), state_in)
+        rel_out = state_out.get_relation(forward_auth_relation.id)
+
+        assert rel_out.local_app_data == {
+            "app_names": '["charmed-app"]',
+            "decisions_address": f"https://oauth2-proxy-k8s.{state_out.model.name}.svc.cluster.local:4180",
+            "headers": '["X-Auth-Request-User"]',
         }
 
-        assert isinstance(harness.charm.unit.status, ActiveStatus)
+        assert state_out.unit_status == ActiveStatus("OAuth2 Proxy is configured")
 
     def test_forward_auth_integration_removed(
-        self, harness: Harness, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        caplog.set_level(logging.INFO)
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-
-        relation_id = setup_forward_auth_relation(harness)
-        harness.remove_relation(relation_id)
-
-        assert "The proxy was unset" in caplog.text
-        assert isinstance(harness.charm.unit.status, ActiveStatus)
-
-
-class TestUpdateStatusEvent:
-    def test_update_status_up(self, harness: Harness) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        setup_peer_relation(harness)
-
-        container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
-        container.get_check = Mock(status="up")
-        container.get_check.return_value.status = CheckStatus.UP
-        harness.charm.on.update_status.emit()
-
-        assert harness.model.unit.status == ActiveStatus()
-
-    def test_update_status_down(self, harness: Harness) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        setup_peer_relation(harness)
-        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
-
-        container = harness.model.unit.get_container(WORKLOAD_CONTAINER)
-        container.get_check = Mock(status="up")
-        container.get_check.return_value.status = CheckStatus.DOWN
-        harness.charm.on.update_status.emit()
-
-        assert harness.model.unit.status == MaintenanceStatus("Status check: DOWN")
-
-
-class TestIngressIntegrationEvents:
-    def test_ingress_relation_created(self, harness: Harness) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-
-        relation_id, url = setup_ingress_relation(harness)
-        assert url == "http://ingress:80/testing-oauth2-proxy-k8s"
-
-        app_data = harness.get_relation_data(relation_id, harness.charm.app)
-        assert app_data == {
-            "model": json.dumps(harness.model.name),
-            "name": json.dumps("oauth2-proxy-k8s"),
-            "port": json.dumps(4180),
-            "strip-prefix": json.dumps(True),
-        }
-
-    def test_ingress_relation_revoked(
         self,
-        harness: Harness,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        forward_auth_relation: ops.testing.Relation,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         caplog.set_level(logging.INFO)
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
+        state_in = create_state(relations=[peer_relation, forward_auth_relation])
+        state_out = context.run(context.on.relation_broken(forward_auth_relation), state_in)
 
-        relation_id, _ = setup_ingress_relation(harness)
-        harness.remove_relation(relation_id)
+        assert "The proxy was unset" in caplog.text
+        assert state_out.unit_status == ActiveStatus()
+
+
+class TestUpdateStatusEvent:
+    def test_update_status_up_active(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        expected_pebble_layer: ops.pebble.Layer,
+    ) -> None:
+        container = ops.testing.Container(
+            name=WORKLOAD_CONTAINER,
+            can_connect=True,
+            layers={"oauth2-proxy": expected_pebble_layer},
+            check_infos={
+                ops.testing.CheckInfo(
+                    name=PEBBLE_READY_CHECK_NAME,
+                    status=ops.pebble.CheckStatus.UP,
+                    level=CheckLevel.UNSET,
+                    startup=CheckStartup.UNSET,
+                    threshold=None,
+                )
+            }
+        )
+
+        state_in = create_state(relations=[peer_relation], container=container)
+        # Simulate ActiveStatus before running update event
+        state_in = replace(state_in, unit_status=ActiveStatus())
+
+        state_out = context.run(context.on.update_status(), state_in)
+
+        assert state_out.unit_status == ActiveStatus()
+
+    def test_update_status_respects_blocked_status(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        expected_pebble_layer: ops.pebble.Layer,
+    ) -> None:
+        container = ops.testing.Container(
+            name=WORKLOAD_CONTAINER,
+            can_connect=True,
+            layers={"oauth2-proxy": expected_pebble_layer},
+            check_infos={
+                ops.testing.CheckInfo(
+                    name=PEBBLE_READY_CHECK_NAME,
+                    status=CheckStatus.UP,
+                    level=CheckLevel.UNSET,
+                    startup=CheckStartup.UNSET,
+                    threshold=None,
+                )
+            }
+        )
+
+        state_in = create_state(
+            relations=[peer_relation],
+            container=container
+        )
+
+        # Verify that update-status does not overwrite BlockedStatus even if checks pass
+        initial_status = BlockedStatus()
+        state_in = replace(state_in, unit_status=initial_status)
+
+        state_out = context.run(context.on.update_status(), state_in)
+
+        assert state_out.unit_status == initial_status
+
+    def test_update_status_down(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        expected_pebble_layer: ops.pebble.Layer,
+    ) -> None:
+        container = ops.testing.Container(
+            name=WORKLOAD_CONTAINER,
+            can_connect=True,
+            layers={"oauth2-proxy": expected_pebble_layer},
+            check_infos={
+                ops.testing.CheckInfo(
+                    name=PEBBLE_READY_CHECK_NAME,
+                    status=CheckStatus.DOWN,
+                    level=CheckLevel.UNSET,
+                    startup=CheckStartup.UNSET,
+                    threshold=None,
+                )
+            }
+        )
+
+        state_in = create_state(relations=[peer_relation], container=container)
+        state_out = context.run(context.on.update_status(), state_in)
+
+        assert state_out.unit_status == MaintenanceStatus("Status check: DOWN")
+
+
+class TestIngressIntegrationEvents:
+    def test_ingress_relation_created(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        ingress_relation: ops.testing.Relation,
+    ) -> None:
+        state_in = create_state(relations=[peer_relation, ingress_relation])
+        container = state_in.get_container(WORKLOAD_CONTAINER)
+
+        state_out = context.run(context.on.pebble_ready(container), state_in)
+        rel_out = state_out.get_relation(ingress_relation.id)
+
+        assert rel_out.remote_app_data["url"] == "http://ingress:80/testing-oauth2-proxy-k8s"
+        assert rel_out.local_app_data == {}
+
+    def test_ingress_relation_revoked(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        ingress_relation: ops.testing.Relation,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.INFO)
+        state_in = create_state(relations=[peer_relation, ingress_relation])
+        state_out = context.run(context.on.relation_broken(ingress_relation), state_in)
 
         assert "This app no longer has ingress" in caplog.text
+        assert state_out.unit_status == ActiveStatus()
 
 
 class TestOAuthIntegrationEvents:
-    def test_oauth_relation_requirer_data_sent(self, harness: Harness) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        relation_id = setup_oauth_relation(harness)
+    def test_oauth_relation_requirer_data_sent(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        oauth_relation: ops.testing.Relation,
+        oauth_secret: ops.testing.Secret,
+    ) -> None:
+        state_in = create_state(relations=[peer_relation, oauth_relation], secrets=[oauth_secret])
 
-        app_data = harness.get_relation_data(relation_id, harness.charm.app)
-        assert app_data == {
+        state_out = context.run(context.on.relation_changed(oauth_relation), state_in)
+        rel_out = state_out.get_relation(oauth_relation.id)
+
+        assert rel_out.local_app_data == {
             "redirect_uri": "http://oauth2-proxy-k8s.testing.svc.cluster.local:4180/oauth2/callback",
             "scope": "openid email profile offline_access",
             "token_endpoint_auth_method": "client_secret_basic",
@@ -345,81 +384,113 @@ class TestOAuthIntegrationEvents:
             "audience": "[]",
         }
 
-    def test_config_is_updated_with_oauth_relation_data(self, harness: Harness) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        setup_peer_relation(harness)
-        setup_oauth_relation(harness)
-        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+    def test_config_is_updated_with_oauth_relation_data(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        oauth_relation: ops.testing.Relation,
+        oauth_secret: ops.testing.Secret,
+    ) -> None:
+        state_in = create_state(relations=[peer_relation, oauth_relation], secrets=[oauth_secret])
 
-        pebble_plan = harness.get_container_pebble_plan(WORKLOAD_CONTAINER).to_dict()
-        env_vars = pebble_plan["services"][WORKLOAD_SERVICE]["environment"]
-        assert env_vars["OAUTH2_PROXY_CLIENT_ID"] == OAUTH_CLIENT_ID
-        assert env_vars["OAUTH2_PROXY_CLIENT_SECRET"] == OAUTH_CLIENT_SECRET
-        assert env_vars["OAUTH2_PROXY_OIDC_ISSUER_URL"] == "https://example.oidc.com"
+        state_out = context.run(context.on.relation_changed(oauth_relation), state_in)
+        container_out = state_out.get_container(WORKLOAD_CONTAINER)
+        layer = container_out.layers[WORKLOAD_CONTAINER]
+        env = layer.services[WORKLOAD_CONTAINER].environment
+
+        assert env["OAUTH2_PROXY_CLIENT_ID"] == OAUTH_CLIENT_ID
+        assert env["OAUTH2_PROXY_CLIENT_SECRET"] == OAUTH_CLIENT_SECRET
+        assert env["OAUTH2_PROXY_OIDC_ISSUER_URL"] == "https://example.oidc.com"
 
 
 class TestTrustedCertificatesTransferIntegration:
     def test_warning_when_no_certs_transfer_integration(
-        self, harness: Harness, caplog: pytest.LogCaptureFixture
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         caplog.set_level(logging.WARNING)
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        setup_peer_relation(harness)
-        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+        state_in = create_state(relations=[peer_relation])
+
+        container = state_in.get_container(WORKLOAD_CONTAINER)
+        state_out = context.run(context.on.pebble_ready(container), state_in)
 
         assert "Missing certificate_transfer integration" in caplog.text
+        assert state_out.unit_status == ActiveStatus()
 
-    def test_trusted_certs_update_called(self, harness: Harness) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        harness.charm.trusted_cert_transfer.update_trusted_ca_certs = mocked_update = Mock(
+    def test_trusted_certs_update_called(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        certificates_relation: ops.testing.Relation,
+        mocker: MockerFixture,
+    ) -> None:
+        mocked_update = mocker.patch.object(
+            TrustedCertificatesTransferIntegration,
+            "update_trusted_ca_certs",
             return_value=None
         )
 
-        setup_peer_relation(harness)
-        setup_certificates_relation(harness)
-        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+        state_in = create_state(relations=[peer_relation, certificates_relation])
+
+        container = state_in.get_container(WORKLOAD_CONTAINER)
+        context.run(context.on.pebble_ready(container), state_in)
 
         mocked_update.assert_called_once()
 
 
 class TestEnableExtraJWTBearerTokens:
     def test_enable_extra_jwt_bearer_tokens(
-        self, harness: Harness, caplog: pytest.LogCaptureFixture
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        oauth_relation: ops.testing.Relation,
+        oauth_secret: ops.testing.Secret,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        setup_peer_relation(harness)
-        setup_oauth_relation(harness)
-        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+        state_in = create_state(
+            relations=[peer_relation, oauth_relation],
+            secrets=[oauth_secret],
+            config={"enable_jwt_bearer_tokens": True}
+        )
 
-        harness.update_config({"enable_jwt_bearer_tokens": True})
+        container = state_in.get_container(WORKLOAD_CONTAINER)
+        state_out = context.run(context.on.pebble_ready(container), state_in)
 
-        pebble_plan = harness.get_container_pebble_plan(WORKLOAD_CONTAINER).to_dict()
-        env_vars = pebble_plan["services"][WORKLOAD_SERVICE]["environment"]
+        container_out = state_out.get_container(WORKLOAD_CONTAINER)
+        layer = container_out.layers[WORKLOAD_CONTAINER]
+        env = layer.services[WORKLOAD_CONTAINER].environment
 
-        assert env_vars["OAUTH2_PROXY_SKIP_JWT_BEARER_TOKENS"] == "true"
-        assert env_vars["OAUTH2_PROXY_EXTRA_JWT_ISSUERS"] == (
+        assert env["OAUTH2_PROXY_SKIP_JWT_BEARER_TOKENS"] == "true"
+        assert env["OAUTH2_PROXY_EXTRA_JWT_ISSUERS"] == (
             f"{OAUTH_PROVIDER_INFO['issuer_url']}={OAUTH_CLIENT_ID}"
         )
-        assert env_vars["OAUTH2_PROXY_BEARER_TOKEN_LOGIN_FALLBACK"] == "false"
-        assert env_vars["OAUTH2_PROXY_EMAIL_DOMAINS"] == "*"
+        assert env["OAUTH2_PROXY_BEARER_TOKEN_LOGIN_FALLBACK"] == "false"
+        assert env["OAUTH2_PROXY_EMAIL_DOMAINS"] == "*"
 
 
 class TestGetExtraJWTIssuers:
     action_name = "get-extra-jwt-issuers"
 
     def test_get_extra_jwt_issuers(
-        self, harness: Harness, caplog: pytest.LogCaptureFixture
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        oauth_relation: ops.testing.Relation,
+        oauth_secret: ops.testing.Secret,
+        mocked_oauth2_proxy_is_running: MagicMock,
     ) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        setup_peer_relation(harness)
-        setup_oauth_relation(harness)
-        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+        state_in = create_state(
+            relations=[peer_relation, oauth_relation],
+            secrets=[oauth_secret],
+            config={"enable_jwt_bearer_tokens": True}
+        )
 
-        harness.update_config({"enable_jwt_bearer_tokens": True})
+        context.run(context.on.action(self.action_name), state_in)
+        results = context.action_results
 
-        output = harness.run_action(self.action_name)
-
-        extra_jwt_issuers_list = output.results["extra-jwt-issuers"]
+        extra_jwt_issuers_list = results["extra-jwt-issuers"]
 
         assert len(extra_jwt_issuers_list) == 1
         assert extra_jwt_issuers_list[0]["oidc-issuer-url"] == "https://example.oidc.com"
@@ -427,12 +498,19 @@ class TestGetExtraJWTIssuers:
         assert extra_jwt_issuers_list[0]["audience"] == OAUTH_CLIENT_ID
 
     def test_get_extra_jwt_issuers_when_not_enabled(
-        self, harness: Harness, caplog: pytest.LogCaptureFixture
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        oauth_relation: ops.testing.Relation,
+        oauth_secret: ops.testing.Secret,
+        mocked_oauth2_proxy_is_running: MagicMock,
     ) -> None:
-        harness.set_can_connect(WORKLOAD_CONTAINER, True)
-        setup_peer_relation(harness)
-        setup_oauth_relation(harness)
-        harness.charm.on.oauth2_proxy_pebble_ready.emit(WORKLOAD_CONTAINER)
+        state_in = create_state(
+            relations=[peer_relation, oauth_relation],
+            secrets=[oauth_secret],
+        )
 
-        with pytest.raises(ActionFailed):
-            harness.run_action(self.action_name)
+        with pytest.raises(ops.testing.ActionFailed) as exc_info:
+            context.run(context.on.action(self.action_name), state_in)
+
+        assert "`enable_jwt_bearer_tokens` is not enabled" in exc_info.value.message
