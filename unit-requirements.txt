@@ -1,6 +1,7 @@
 -r requirements.txt
 coverage[toml]
 ipdb
+ops[testing]
 pydantic
 pytest
 pytest-mock
