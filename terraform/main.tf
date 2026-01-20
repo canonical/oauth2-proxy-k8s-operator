@@ -14,7 +14,7 @@ resource "juju_application" "application" {
   units       = var.units
 
   charm {
-    name     = " oauth2-proxy-k8s"
+    name     = "oauth2-proxy-k8s"
     base     = var.base
     channel  = var.channel
     revision = var.revision
