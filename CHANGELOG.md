@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.1.0...v2.1.1) (2026-01-20)
+
+
+### Bug Fixes
+
+* adjust charm name ([898cb69](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/898cb69ac047ce9de59cd941cfafe6a19f608881))
+
 ## [2.1.0](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.0.0...v2.1.0) (2026-01-20)
 
 
