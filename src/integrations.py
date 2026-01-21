@@ -104,10 +104,10 @@ class AuthProxyIntegrationData:
     @classmethod
     def load(cls, provider: AuthProxyProvider) -> "AuthProxyIntegrationData":
         app_names = provider.get_app_names()
-        allowed_endpoints = provider.get_relations_data("allowed_endpoints")
-        headers = provider.get_relations_data("headers")
-        authenticated_emails = provider.get_relations_data("authenticated_emails")
-        authenticated_email_domains = provider.get_relations_data("authenticated_email_domains")
+        allowed_endpoints = provider.get_relations_data("allowed_endpoints") or []
+        headers = provider.get_relations_data("headers") or []
+        authenticated_emails = provider.get_relations_data("authenticated_emails") or []
+        authenticated_email_domains = provider.get_relations_data("authenticated_email_domains") or []
 
         return cls(
             app_names=app_names,

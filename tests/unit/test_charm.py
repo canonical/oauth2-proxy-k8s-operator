@@ -205,6 +205,44 @@ class TestAuthProxyEvents:
 
         mocked_forward_auth_update.assert_called()
 
+    def test_auth_proxy_with_missing_optional_fields(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+    ) -> None:
+        """Test that charm handles missing optional fields gracefully."""
+        # Create a relation with required data but missing optional fields
+        minimal_auth_proxy_relation = ops.testing.Relation(
+            endpoint="auth-proxy",
+            interface="auth_proxy",
+            remote_app_name="requirer",
+            remote_app_data={
+                "protected_urls": '["https://example.com"]',
+                "allowed_endpoints": '[]',
+                "headers": '["X-Auth-Request-User"]',
+                # authenticated_emails is intentionally missing
+                # authenticated_email_domains is intentionally missing
+            },
+        )
+        state_in = create_state(relations=[peer_relation, minimal_auth_proxy_relation])
+        container = state_in.get_container(WORKLOAD_CONTAINER)
+
+        # This should not raise KeyError even when optional fields are missing
+        state_out = context.run(context.on.pebble_ready(container), state_in)
+
+        # Verify the charm is in active status (not crashed with KeyError)
+        assert state_out.unit_status == ActiveStatus()
+
+        # Verify the environment is set up correctly with defaults
+        container_out = state_out.get_container(WORKLOAD_CONTAINER)
+        layer = container_out.layers[WORKLOAD_CONTAINER]
+        env = layer.services[WORKLOAD_CONTAINER].environment
+
+        # authenticated_emails file should not be set since the field was missing
+        assert "OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE" not in env
+        # Default OAUTH2_PROXY_EMAIL_DOMAINS = "*" is always present
+        assert env["OAUTH2_PROXY_EMAIL_DOMAINS"] == "*"
+
 
 class TestForwardAuthEvents:
     def test_forward_auth_set(
