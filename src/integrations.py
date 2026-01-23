@@ -37,11 +37,15 @@ class PeerData:
         self._model = model
         self._app = model.app
 
-        if not self._model.get_relation(PEER_INTEGRATION_NAME):
+        if not (peers := self._model.get_relation(PEER_INTEGRATION_NAME)) or not self._model.unit.is_leader():
             return
 
-        if self._model.unit.is_leader() and self[COOKIE_SECRET_KEY] is None:
-            self[COOKIE_SECRET_KEY] = secrets.token_hex(16)
+        try:
+            if self[COOKIE_SECRET_KEY] is None:
+                self[COOKIE_SECRET_KEY] = secrets.token_hex(16)
+        except json.JSONDecodeError:
+            # Ensure old raw cookie values are json-encoded for compatibility
+            self[COOKIE_SECRET_KEY] = peers.data[self._app].get(COOKIE_SECRET_KEY)
 
     def __getitem__(self, key: str) -> Any:
         if not (peers := self._model.get_relation(PEER_INTEGRATION_NAME)):
@@ -52,10 +56,6 @@ class PeerData:
 
     def __setitem__(self, key: str, value: Any) -> None:
         if not (peers := self._model.get_relation(PEER_INTEGRATION_NAME)):
-            return
-
-        if key == COOKIE_SECRET_KEY and self[COOKIE_SECRET_KEY] is not None:
-            logger.error("Cookie secret cannot be overwritten in the peer integration")
             return
 
         peers.data[self._app][key] = json.dumps(value)
