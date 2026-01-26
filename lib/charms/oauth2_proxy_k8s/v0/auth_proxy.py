@@ -377,65 +377,62 @@ class AuthProxyProvider(AuthProxyRelation):
 
         return app_names
 
-    def get_single_relation_data(self, relation: Relation, key: str) -> Optional[Any]:
-        """Returns a single key value from a specific auth-proxy relation.
+    def get_decoded_relations_data(self) -> List[Dict]:
+        """Return decoded app databags for all auth-proxy relations.
         """
-        if not relation.app or not relation.data[relation.app] or not (raw_value := relation.data[relation.app].get(key)):
+        decoded: List[Dict] = []
+        relations = self._charm.model.relations.get(self._relation_name, [])
+
+        for relation in relations:
+            if relation.app is None:
+                continue
+
+            if not (raw_data := relation.data.get(relation.app)):
+                continue
+
+            try:
+                decoded.append(_load_data(raw_data))
+            except DataValidationError:
+                continue
+
+        return decoded
+
+    def _normalize_relation_value(self, key: str, value: Any) -> Optional[List[str]]:
+        """Normalize a relation value into list[str], filtering empty values.
+        """
+        if value is None:
+            return []
+
+        if isinstance(value, str):
+            values = [value]
+        elif isinstance(value, list):
+            values = value
+        else:
+            logger.error(
+                "Invalid relation data for key '%s': expected list[str] or str, got %s",
+                key,
+                type(value).__name__,
+            )
             return None
 
-        return raw_value
+        return [
+            v.strip() for v in values
+            if isinstance(v, str) and v.strip()
+        ]
 
     def get_relations_data(self, key: str) -> Optional[List[str]]:
         """Returns a list of key values from all auth-proxy relations or None.
-
-        The relation value may be either a single string or an array of strings. If it's any other
-        type, this method will log an error and return None.
         """
         if not self._charm.model.relations[self._relation_name]:
             return None
 
         relations_data: set[str] = set()
-        for relation in self._charm.model.relations[self._relation_name]:
-            raw_value = self.get_single_relation_data(relation, key)
 
-            if raw_value is None:
-                continue
-
-            try:
-                decoded = json.loads(raw_value)
-            except json.JSONDecodeError:
-                decoded = raw_value
-
-            if not decoded:
-                continue
-
-            if isinstance(decoded, str):
-                relations_data.add(decoded)
-                continue
-
-            if isinstance(decoded, list):
-                if any(not self.is_non_empty_string_value(item) for item in decoded):
-                    logger.error(
-                        "Invalid relation data for key '%s': expected list[str] or str, got list with non-string item: key (%r)",
-                        key,
-                        decoded,
-                    )
-                    continue
-
-                relations_data.update(decoded)
-                continue
-
-            logger.error(
-                "Invalid relation data for key '%s': expected list[str] or str, got %s",
-                key,
-                type(decoded).__name__,
-            )
-            continue
+        for data in self.get_decoded_relations_data():
+            if normalized := self._normalize_relation_value(key, data.get(key)):
+                relations_data.update(normalized)
 
         return list(relations_data)
-
-    def is_non_empty_string_value(self, item) -> bool:
-        return isinstance(item, str) and item.strip() != ""
 
 class InvalidAuthProxyConfigEvent(EventBase):
     """Event to notify the charm that the auth proxy configuration is invalid."""
