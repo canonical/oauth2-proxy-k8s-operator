@@ -54,6 +54,7 @@ def test_ingress_relation(juju: jubilant.Juju) -> None:
     juju.deploy(
         TRAEFIK,
         channel="latest/edge",
+        revision=263,
         trust=True,
     )
 
