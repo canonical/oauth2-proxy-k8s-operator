@@ -149,11 +149,17 @@ def test_allowed_forward_auth_url_redirect(juju: jubilant.Juju, lightkube_client
     assert resp.status_code == 200
 
 
+@retry(
+    wait=wait_exponential(multiplier=3, min=1, max=20),
+    stop=stop_after_attempt(10),
+    reraise=True,
+)
 def test_protected_forward_auth_url_redirect(juju: jubilant.Juju, lightkube_client: Client) -> None:
     """Test reaching a protected url.
 
     The request should be forwarded by traefik to oauth2 proxy.
     An unauthenticated request should then be denied with 403 response.
+    Retry the request to ensure the middleware config was processed by traefik.
     """
     requirer_url = get_reverse_proxy_app_url(juju, TRAEFIK, AUTH_PROXY_REQUIRER, lightkube_client)
 
