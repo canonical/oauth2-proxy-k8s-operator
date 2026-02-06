@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.1.2](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.1.1...v2.1.2) (2026-02-04)
+
+
+### Bug Fixes
+
+* handle missing optional auth-proxy relation fields ([2e39546](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/2e395461882deb1f72611841b98757ebf2912599))
+* peer relation data backwards compatibility ([e65c535](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/e65c5354fb683583f09c4d8dd88200909f73b42a))
+* peer relation data backwards compatibility ([#206](https://github.com/canonical/oauth2-proxy-k8s-operator/issues/206)) ([4cf36e0](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/4cf36e0831252ff95a284ae81973f2f000fd577c))
+
 ## [2.1.1](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.1.0...v2.1.1) (2026-01-20)
 
 
