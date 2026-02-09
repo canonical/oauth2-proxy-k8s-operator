@@ -16,17 +16,14 @@ links:
   documentation: https://discourse.charmhub.io/t/charmed-oauth2-proxy-k8s-overview/14663
   source: https://github.com/canonical/oauth2-proxy-k8s-operator
   issues: https://github.com/canonical/oauth2-proxy-k8s-operator/issues
-
 platforms:
   ubuntu@22.04:amd64:
-
 parts:
   charm:
     charm-binary-python-packages:
       - jsonschema
       - pydantic
       - "setuptools>=70.0.0"
-
 config:
   options:
     dev:
@@ -54,12 +51,10 @@ config:
         If set to `True`, OAuth2 Proxy will allow requests that have verified JWT bearer tokens.
       type: boolean
       default: False
-
 actions:
   get-extra-jwt-issuers:
     description: |
       Get the list of OIDC issuers URLs and their audiences used to validate JWT tokens when `enable_jwt_bearer_tokens=true`.
-
 # Metadata
 requires:
   ingress:
@@ -73,23 +68,21 @@ requires:
     interface: certificate_transfer
     limit: 1
     optional: true
-
 provides:
   auth-proxy:
     interface: auth_proxy
   forward-auth:
     interface: forward_auth
-
 peers:
   oauth2-proxy:
     interface: oauth2_proxy_peers
-
 containers:
   oauth2-proxy:
     resource: oauth2-proxy-image
-
 resources:
   oauth2-proxy-image:
     type: oci-image
     description: OCI image for the oauth2-proxy container
     upstream-source: ghcr.io/canonical/oauth2-proxy:7.8.1
+  oci-image:
+    upstream-source: ghcr.io/canonical/oauth2-proxy:7.9.0
