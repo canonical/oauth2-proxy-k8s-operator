@@ -137,6 +137,40 @@ class TestConfigChangedEvent:
 
         assert env["OAUTH2_PROXY_SSL_INSECURE_SKIP_VERIFY"] == "true"
 
+    def test_oauth2_proxy_config_with_set_authorization_header_flag(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+    ) -> None:
+        state_in = create_state(
+            config={"set_authorization_header": True}, relations=[peer_relation]
+        )
+        container = state_in.get_container(WORKLOAD_CONTAINER)
+
+        state_out = context.run(context.on.pebble_ready(container), state_in)
+        container_out = state_out.get_container(WORKLOAD_CONTAINER)
+        layer = container_out.layers[WORKLOAD_CONTAINER]
+        env = layer.services[WORKLOAD_CONTAINER].environment
+
+        assert env["OAUTH2_PROXY_SET_AUTHORIZATION_HEADER"] == "true"
+
+    def test_oauth2_proxy_config_without_set_authorization_header_flag(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+    ) -> None:
+        state_in = create_state(
+            config={"set_authorization_header": False}, relations=[peer_relation]
+        )
+        container = state_in.get_container(WORKLOAD_CONTAINER)
+
+        state_out = context.run(context.on.pebble_ready(container), state_in)
+        container_out = state_out.get_container(WORKLOAD_CONTAINER)
+        layer = container_out.layers[WORKLOAD_CONTAINER]
+        env = layer.services[WORKLOAD_CONTAINER].environment
+
+        assert "OAUTH2_PROXY_SET_AUTHORIZATION_HEADER" not in env
+
 
 class TestAuthProxyEvents:
     def test_config_file_when_auth_proxy_config_provided(
