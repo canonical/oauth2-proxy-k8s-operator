@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.3](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.1.2...v2.1.3) (2026-03-10)
+
+
+### Bug Fixes
+
+* trigger release to include PR [#229](https://github.com/canonical/oauth2-proxy-k8s-operator/issues/229) updates ([e7e8593](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/e7e8593c67829e9dadde241066b08935747e173b))
+
 ## [2.1.2](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.1.1...v2.1.2) (2026-02-04)
 
 
