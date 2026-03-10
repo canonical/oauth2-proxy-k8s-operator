@@ -54,6 +54,13 @@ config:
         If set to `True`, OAuth2 Proxy will allow requests that have verified JWT bearer tokens.
       type: boolean
       default: False
+    set_authorization_header:
+      description: |
+        If set to `True`, OAuth2 Proxy will inject the id_token as `Authorization: Bearer <jwt>`
+        in the ext_authz allow response. This enables downstream components (e.g. Istio's
+        RequestAuthentication) to validate JWT claims from the Authorization header.
+      type: boolean
+      default: False
 
 actions:
   get-extra-jwt-issuers:

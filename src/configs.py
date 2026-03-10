@@ -29,4 +29,7 @@ class CharmConfig:
             env_vars["OAUTH2_PROXY_BEARER_TOKEN_LOGIN_FALLBACK"] = "false"
             env_vars["OAUTH2_PROXY_EMAIL_DOMAINS"] = "*"
 
+        if self._config["set_authorization_header"]:
+            env_vars["OAUTH2_PROXY_SET_AUTHORIZATION_HEADER"] = "true"
+
         return env_vars
