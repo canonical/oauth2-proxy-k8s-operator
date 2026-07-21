@@ -23,4 +23,4 @@ jobs:
     uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@5830f3e6723de07cb5b7ccb6c84031d8b2964c62 # v1.11.4
     with:
       container-name: "oauth2-proxy"
-      use-charmcraftcache: true
+      use-charmcraftcache: false
