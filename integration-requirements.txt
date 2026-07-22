@@ -1,6 +1,0 @@
-jubilant
-pytest
-requests
-lightkube
-tenacity==9.1.4
--r requirements.txt

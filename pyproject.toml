@@ -1,6 +1,64 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+[project]
+name = "oauth2-proxy-k8s-operator"
+version = "0.0.0"
+description = "A Charmed Operator for running OAuth2 Proxy on Kubernetes"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.10"
+dependencies = [
+    "ops ~=3.0",
+    "jsonschema",
+    "pydantic==2.13.4",
+    "tenacity==9.1.4",
+    "lightkube",
+    "lightkube-models",
+    "yarl",
+]
+
+[dependency-groups]
+fmt = [
+    "isort",
+    "ruff",
+]
+lint = [
+    "codespell",
+    "isort",
+    "ruff",
+    "tomli",
+]
+unit = [
+    "coverage[toml]",
+    "ipdb",
+    "ops[testing]",
+    "pydantic",
+    "pytest",
+    "pytest-mock",
+    "toml",
+]
+integration = [
+    "jubilant",
+    "pytest",
+    "requests",
+    "lightkube",
+    "tenacity==9.1.4",
+]
+dev = [
+    "pre-commit",
+    "mypy",
+    "types-PyYAML",
+    "types-requests",
+    { include-group = "fmt" },
+    { include-group = "lint" },
+    { include-group = "unit" },
+    { include-group = "integration" },
+]
+
+[tool.uv]
+package = false
+
 [tool.bandit]
 exclude_dirs = ["/venv/"]
 [tool.bandit.assert_used]
