@@ -403,6 +403,35 @@ class TestUpdateStatusEvent:
 
         assert state_out.unit_status == MaintenanceStatus("Status check: DOWN")
 
+    def test_update_status_recovers_to_active(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        expected_pebble_layer: ops.pebble.Layer,
+    ) -> None:
+        container = ops.testing.Container(
+            name=WORKLOAD_CONTAINER,
+            can_connect=True,
+            layers={"oauth2-proxy": expected_pebble_layer},
+            check_infos={
+                ops.testing.CheckInfo(
+                    name=PEBBLE_READY_CHECK_NAME,
+                    status=CheckStatus.UP,
+                    level=CheckLevel.UNSET,
+                    startup=CheckStartup.UNSET,
+                    threshold=None,
+                )
+            },
+        )
+
+        state_in = create_state(relations=[peer_relation], container=container)
+        # Simulate MaintenanceStatus before running update event
+        state_in = replace(state_in, unit_status=MaintenanceStatus("Status check: DOWN"))
+
+        state_out = context.run(context.on.update_status(), state_in)
+
+        assert state_out.unit_status == ActiveStatus()
+
 
 class TestIngressIntegrationEvents:
     def test_ingress_relation_created(
