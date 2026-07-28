@@ -53,7 +53,7 @@ def test_build_and_deploy(juju: jubilant.Juju, local_charm: Path) -> None:
 def test_ingress_relation(juju: jubilant.Juju) -> None:
     juju.deploy(
         TRAEFIK,
-        channel="latest/edge",
+        channel="latest/stable",
         trust=True,
     )
 
