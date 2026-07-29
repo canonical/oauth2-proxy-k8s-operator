@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.4](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.1.3...v2.1.4) (2026-07-29)
+
+
+### Bug Fixes
+
+* handle status on update event ([374d6bf](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/374d6bf1db66af671907665a1dfe48429b156bbe))
+* handle status on update event ([#281](https://github.com/canonical/oauth2-proxy-k8s-operator/issues/281)) ([d17ad6e](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/d17ad6ebc6019b417d2650d965d76d2aff60325f))
+
 ## [2.1.3](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.1.2...v2.1.3) (2026-03-10)
 
 
