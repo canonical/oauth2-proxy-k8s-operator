@@ -286,6 +286,11 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             self.unit.status = MaintenanceStatus("Status check: DOWN")
             return
 
+        if isinstance(self.unit.status, BlockedStatus):
+            return
+
+        self._holistic_handler(event)
+
     @log_event_handler(logger)
     def _on_oauth_info_changed(self, event: OAuthInfoChangedEvent) -> None:
         """Handle `oauth-info-changed` event.
