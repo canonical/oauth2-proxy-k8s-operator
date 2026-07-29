@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.5](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.1.4...v2.1.5) (2026-07-29)
+
+
+### Bug Fixes
+
+* add permissions to publish action ([0dea4ab](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/0dea4ab3ed6650974b2ec0de20fa1e951a8ed210))
+* add permissions to publish action ([#283](https://github.com/canonical/oauth2-proxy-k8s-operator/issues/283)) ([54e2cea](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/54e2cea07477f3483f6af2c5770e5d79deeca025))
+
 ## [2.1.4](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.1.3...v2.1.4) (2026-07-29)
 
 
