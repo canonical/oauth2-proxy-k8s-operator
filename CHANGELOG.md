@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.6](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.1.5...v2.1.6) (2026-07-30)
+
+
+### Bug Fixes
+
+* disable charmcraftcache on all workflows ([141dfdd](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/141dfdd0e241791cc03d1742ae39bd421754f7e0))
+* disable charmcraftcache on all workflows ([#285](https://github.com/canonical/oauth2-proxy-k8s-operator/issues/285)) ([48b9e7c](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/48b9e7c3817370da38c346330778d294c30b5584))
+
 ## [2.1.5](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.1.4...v2.1.5) (2026-07-29)
 
 
