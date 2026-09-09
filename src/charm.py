@@ -30,6 +30,7 @@ from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
     ResourceRequirements,
     adjust_resource_requirements,
 )
+from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.traefik_k8s.v2.ingress import (
     IngressPerAppReadyEvent,
     IngressPerAppRequirer,
@@ -106,6 +107,9 @@ class Oauth2ProxyK8sOperatorCharm(CharmBase):
             self,
             WORKLOAD_CONTAINER,
             resource_reqs_func=self._resource_reqs_from_config,
+        )
+        self.service_patcher = KubernetesServicePatch(
+            self, [(f"http-{OAUTH2_PROXY_API_PORT}", OAUTH2_PROXY_API_PORT)]
         )
 
         self.oauth = OAuthRequirer(self, self._oauth_client_config)

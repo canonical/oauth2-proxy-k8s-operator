@@ -199,6 +199,16 @@ def mocked_k8s_resource_patch(mocker: MockerFixture) -> None:
     )
 
 
+@pytest.fixture(autouse=True)
+def mocked_k8s_service_patch(mocker: MockerFixture) -> None:
+    mocker.patch.multiple(
+        "charm.KubernetesServicePatch",
+        _namespace=MODEL_NAME,
+        _patch=lambda *a, **kw: True,
+        is_patched=lambda *a, **kw: True,
+    )
+
+
 @pytest.fixture
 def mocked_container() -> MagicMock:
     return create_autospec(Container)
