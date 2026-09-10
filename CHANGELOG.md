@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.1.7](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.1.6...v2.1.7) (2026-09-10)
+
+
+### Bug Fixes
+
+* **deps:** update dependency pydantic to v2.13.5 ([5572f2e](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/5572f2efad887eb8d68306d07c5a400713e75282))
+* **deps:** update dependency pydantic to v2.13.5 ([#301](https://github.com/canonical/oauth2-proxy-k8s-operator/issues/301)) ([ff0c477](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/ff0c47719ea73a33f107ad9d951ffc65ebd25d5d))
+* prefix service port name with http for istio compatibility ([1cbc3b3](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/1cbc3b3c7bf9e88318787324e76910056de54a12))
+* prefix service port name with http for istio compatibility ([#309](https://github.com/canonical/oauth2-proxy-k8s-operator/issues/309)) ([7b398b6](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/7b398b62c06441df396af45cccf146b8d698561e))
+
 ## [2.1.6](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.1.5...v2.1.6) (2026-07-30)
 
 
