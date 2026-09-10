@@ -14,6 +14,6 @@ permissions:
 jobs:
   release:
       name: release
-      uses: canonical/identity-team/.github/workflows/charm-release.yaml@5830f3e6723de07cb5b7ccb6c84031d8b2964c62 # v1.11.4
+      uses: canonical/identity-team/.github/workflows/charm-release.yaml@b5428d226e364de1c5ad601c1ec27c333f489d1d # v1.16.2
       secrets:
         PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
