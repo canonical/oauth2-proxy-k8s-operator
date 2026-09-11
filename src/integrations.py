@@ -8,11 +8,11 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Any, List
 
+from charmlibs.interfaces.auth_proxy import AuthProxyProvider
 from charms.certificate_transfer_interface.v1.certificate_transfer import (
     CertificateTransferRequires,
 )
 from charms.hydra.v0.oauth import OAuthRequirer
-from charms.oauth2_proxy_k8s.v0.auth_proxy import AuthProxyProvider
 from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from ops import Model
 from ops.charm import CharmBase

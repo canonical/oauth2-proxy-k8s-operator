@@ -4,6 +4,10 @@
 
 """Interface library for providing OAuth2 Proxy with downstream charms' auth-proxy information.
 
+> **DEPRECATED**
+> This charm library is deprecated in favor of the `charmlibs-interfaces-auth-proxy` PyPI package.
+> Please install `charmlibs-interfaces-auth-proxy` and import from `charmlibs.interfaces.auth_proxy`.
+
 It is required to integrate a charm into an Identity and Access Proxy (IAP).
 
 ## Getting Started
@@ -82,7 +86,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 4
+LIBPATCH = 5
 
 RELATION_NAME = "auth-proxy"
 INTERFACE_NAME = "auth_proxy"
