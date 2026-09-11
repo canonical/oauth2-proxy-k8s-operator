@@ -9,6 +9,8 @@ readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.10"
 dependencies = [
+    "charmlibs-interfaces-auth-proxy~=1.0.0",
+    "charmlibs-interfaces-forward-auth~=1.0.0",
     "ops ~=3.0",
     "jsonschema",
     "pydantic==2.13.5",
