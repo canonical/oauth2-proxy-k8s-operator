@@ -132,6 +132,32 @@ wheels = [
 ]
 
 [[package]]
+name = "charmlibs-interfaces-auth-proxy"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jsonschema" },
+    { name = "ops" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/45/32/cd2f7ec112767092214fae19f0e63532e12b42052dced856aeea6fb11690/charmlibs_interfaces_auth_proxy-1.0.0.tar.gz", hash = "sha256:265a684bf078a3ee11d19ae2732972007bccd976177fc2c1fdca1f4105b46cba", size = 44426, upload-time = "2026-07-20T13:25:32.478Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/41/4f2ad3501c8838992ddac79d53bbbff50f93ef32bb1c047379d1541d98fe/charmlibs_interfaces_auth_proxy-1.0.0-py3-none-any.whl", hash = "sha256:9a8156675ab069567c94d50be262558c6eae8c9f419ab58a7a5b9373faed10d1", size = 8402, upload-time = "2026-07-20T13:25:31.3Z" },
+]
+
+[[package]]
+name = "charmlibs-interfaces-forward-auth"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jsonschema" },
+    { name = "ops" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1a/bd/e5391fe9fb67cbd39aca99a50f7901fb94fd93682c0beae337b78b03f62c/charmlibs_interfaces_forward_auth-1.0.0.tar.gz", hash = "sha256:05755baaad3694bf5df3d3a65df23434426c5ea4662608115b2fa8c38ecc2a42", size = 45686, upload-time = "2026-07-14T12:39:41.157Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0d/d8/12c05e77b8caf4429e08c789d67156ad1eaa9575047f564728483461eb17/charmlibs_interfaces_forward_auth-1.0.0-py3-none-any.whl", hash = "sha256:cef2725163eba5f12d96ce9f205e35ad0ee68533d14d38dbe0a0593ff1677324", size = 8047, upload-time = "2026-07-14T12:39:40.205Z" },
+]
+
+[[package]]
 name = "charset-normalizer"
 version = "3.5.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1235,6 +1261,8 @@ name = "oauth2-proxy-k8s-operator"
 version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "charmlibs-interfaces-auth-proxy" },
+    { name = "charmlibs-interfaces-forward-auth" },
     { name = "jsonschema" },
     { name = "lightkube" },
     { name = "lightkube-models" },
@@ -1295,6 +1323,8 @@ unit = [
 
 [package.metadata]
 requires-dist = [
+    { name = "charmlibs-interfaces-auth-proxy", specifier = "~=1.0.0" },
+    { name = "charmlibs-interfaces-forward-auth", specifier = "~=1.0.0" },
     { name = "jsonschema" },
     { name = "lightkube" },
     { name = "lightkube-models" },
