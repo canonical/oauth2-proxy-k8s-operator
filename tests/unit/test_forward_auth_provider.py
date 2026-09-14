@@ -7,7 +7,7 @@ from typing import Any
 import ops.testing
 import pytest
 import yaml
-from charms.oauth2_proxy_k8s.v0.forward_auth import (
+from charmlibs.interfaces.forward_auth import (
     ForwardAuthConfig,
     ForwardAuthProvider,
     ForwardAuthProxySet,

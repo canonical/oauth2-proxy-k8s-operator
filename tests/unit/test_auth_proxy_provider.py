@@ -6,7 +6,7 @@ from typing import Any
 import ops.testing
 import pytest
 import yaml
-from charms.oauth2_proxy_k8s.v0.auth_proxy import (
+from charmlibs.interfaces.auth_proxy import (
     AuthProxyConfigChangedEvent,
     AuthProxyConfigRemovedEvent,
     AuthProxyProvider,

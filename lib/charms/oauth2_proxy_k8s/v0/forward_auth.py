@@ -4,6 +4,10 @@
 
 """Interface library for providing API Gateways with Identity and Access Proxy information.
 
+> **DEPRECATED**
+> This charm library is deprecated in favor of the `charmlibs-interfaces-forward-auth` PyPI package.
+> Please install `charmlibs-interfaces-forward-auth` and import from `charmlibs.interfaces.forward_auth`.
+
 It is required to integrate with OAuth2 Proxy - a reverse proxy and static file server that provides authentication
 using Identity Platform's built-in identity management system and integrated identity providers (Google, GitHub, and others).
 
@@ -67,7 +71,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 3
 
 RELATION_NAME = "forward-auth"
 INTERFACE_NAME = "forward_auth"

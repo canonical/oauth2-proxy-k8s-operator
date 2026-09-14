@@ -3,7 +3,7 @@
 # See LICENSE file for licensing details.
 import logging
 
-from charms.oauth2_proxy_k8s.v0.auth_proxy import AuthProxyConfig, AuthProxyRequirer
+from charmlibs.interfaces.auth_proxy import AuthProxyConfig, AuthProxyRequirer
 from charms.traefik_k8s.v2.ingress import IngressPerAppReadyEvent, IngressPerAppRequirer
 from ops.charm import CharmBase, PebbleReadyEvent
 from ops.main import main

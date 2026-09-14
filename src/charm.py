@@ -6,24 +6,24 @@
 
 import logging
 
-from charms.certificate_transfer_interface.v1.certificate_transfer import (
-    CertificatesAvailableEvent,
-    CertificatesRemovedEvent,
-)
-from charms.hydra.v0.oauth import ClientConfig as OauthClientConfig
-from charms.hydra.v0.oauth import OAuthInfoChangedEvent, OAuthRequirer
-from charms.oauth2_proxy_k8s.v0.auth_proxy import (
+from charmlibs.interfaces.auth_proxy import (
     AuthProxyConfigChangedEvent,
     AuthProxyConfigRemovedEvent,
     AuthProxyProvider,
 )
-from charms.oauth2_proxy_k8s.v0.forward_auth import (
+from charmlibs.interfaces.forward_auth import (
     ForwardAuthConfig,
     ForwardAuthProvider,
     ForwardAuthProxySet,
     ForwardAuthRelationRemovedEvent,
     InvalidForwardAuthConfigEvent,
 )
+from charms.certificate_transfer_interface.v1.certificate_transfer import (
+    CertificatesAvailableEvent,
+    CertificatesRemovedEvent,
+)
+from charms.hydra.v0.oauth import ClientConfig as OauthClientConfig
+from charms.hydra.v0.oauth import OAuthInfoChangedEvent, OAuthRequirer
 from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
     K8sResourcePatchFailedEvent,
     KubernetesComputeResourcesPatch,
