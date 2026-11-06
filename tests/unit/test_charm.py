@@ -108,6 +108,42 @@ class TestPebbleReadyEvent:
 
         assert expected_plan == layer.to_dict()
 
+    @pytest.mark.parametrize(
+        "environ",
+        [
+            {
+                "JUJU_CHARM_HTTP_PROXY": "http://proxy.internal:3128",
+                "JUJU_CHARM_HTTPS_PROXY": "http://proxy.internal:3128",
+                "JUJU_CHARM_NO_PROXY": ".svc,10.0.0.0/8",
+            },
+            {
+                "HTTP_PROXY": "http://proxy.internal:3128",
+                "HTTPS_PROXY": "http://proxy.internal:3128",
+                "NO_PROXY": ".svc,10.0.0.0/8",
+            },
+        ],
+        ids=["juju-proxy-settings", "legacy-proxy-settings"],
+    )
+    def test_on_pebble_ready_passes_the_model_proxy_settings(
+        self,
+        context: ops.testing.Context,
+        peer_relation: ops.testing.PeerRelation,
+        monkeypatch: pytest.MonkeyPatch,
+        environ: dict,
+    ) -> None:
+        for name, value in environ.items():
+            monkeypatch.setenv(name, value)
+        state_in = create_state(relations=[peer_relation])
+
+        container = state_in.get_container(WORKLOAD_CONTAINER)
+        state_out = context.run(context.on.pebble_ready(container), state_in)
+        layer = state_out.get_container(WORKLOAD_CONTAINER).layers[WORKLOAD_CONTAINER]
+
+        environment = layer.to_dict()["services"][WORKLOAD_SERVICE]["environment"]
+        assert environment["HTTP_PROXY"] == "http://proxy.internal:3128"
+        assert environment["HTTPS_PROXY"] == "http://proxy.internal:3128"
+        assert environment["NO_PROXY"] == ".svc,10.0.0.0/8"
+
     def test_workload_version_set(
         self,
         context: ops.testing.Context,
