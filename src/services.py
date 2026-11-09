@@ -9,9 +9,9 @@ from ops import Unit
 from ops.pebble import Layer, LayerDict
 
 from constants import (
-    HTTP_PROXY,
-    HTTPS_PROXY,
-    NO_PROXY,
+    JUJU_CHARM_HTTP_PROXY,
+    JUJU_CHARM_HTTPS_PROXY,
+    JUJU_CHARM_NO_PROXY,
     OAUTH2_PROXY_API_PORT,
     PEBBLE_READY_CHECK_NAME,
     WORKLOAD_CONTAINER,
@@ -65,9 +65,9 @@ class PebbleService:
         # Juju passes the model's juju-*-proxy settings as JUJU_CHARM_*_PROXY, and the
         # legacy http-proxy, https-proxy and no-proxy settings as the plain variables.
         proxy_env_vars = {
-            "HTTP_PROXY": os.environ.get(HTTP_PROXY) or os.environ.get("HTTP_PROXY"),
-            "HTTPS_PROXY": os.environ.get(HTTPS_PROXY) or os.environ.get("HTTPS_PROXY"),
-            "NO_PROXY": os.environ.get(NO_PROXY) or os.environ.get("NO_PROXY"),
+            "HTTP_PROXY": os.environ.get(JUJU_CHARM_HTTP_PROXY) or os.environ.get("HTTP_PROXY"),
+            "HTTPS_PROXY": os.environ.get(JUJU_CHARM_HTTPS_PROXY) or os.environ.get("HTTPS_PROXY"),
+            "NO_PROXY": os.environ.get(JUJU_CHARM_NO_PROXY) or os.environ.get("NO_PROXY"),
         }
 
         updated_env_vars = ChainMap(*(source.to_env_vars() for source in env_var_sources))  # type: ignore
