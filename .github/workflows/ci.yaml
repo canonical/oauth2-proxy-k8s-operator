@@ -20,7 +20,8 @@ on:
 jobs:
   tests:
     name: CI
-    uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@00995831ff788db43992012900820edf7967305f # v1.19.2
+    uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@add-multi-juju-lifecycle-tests
     with:
       container-name: "oauth2-proxy"
       use-charmcraftcache: false
+      juju-channels: '["3.6/stable", "4.0/stable"]'
