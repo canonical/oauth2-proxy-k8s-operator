@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.9](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.1.8...v2.1.9) (2026-11-21)
+
+
+### Bug Fixes
+
+* **deps:** update dependency pydantic to v2.14.4 ([9f3f809](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/9f3f8094865c06f1c2703bd1f7f5b16112dcf14e))
+* **deps:** update dependency pydantic to v2.14.4 ([#370](https://github.com/canonical/oauth2-proxy-k8s-operator/issues/370)) ([de3720f](https://github.com/canonical/oauth2-proxy-k8s-operator/commit/de3720fe2581f3264ae79aa78e9ad27a2ef06e4a))
+
 ## [2.1.8](https://github.com/canonical/oauth2-proxy-k8s-operator/compare/v2.1.7...v2.1.8) (2026-11-09)
 
 
