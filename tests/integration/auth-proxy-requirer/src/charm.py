@@ -62,7 +62,7 @@ class AuthProxyRequirerMock(CharmBase):
                 self._service_name: {
                     "override": "replace",
                     "summary": "httpbin layer",
-                    "command": "gunicorn -b 0.0.0.0:80 httpbin:app -k gevent",
+                    "command": "/usr/bin/go-httpbin -port 80",
                     "startup": "enabled",
                 }
             },
