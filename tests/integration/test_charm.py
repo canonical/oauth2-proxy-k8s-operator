@@ -104,7 +104,7 @@ def test_auth_proxy_relation(juju: jubilant.Juju, requirer_charm: Path) -> None:
     juju.deploy(
         charm=str(requirer_charm),
         app=AUTH_PROXY_REQUIRER,
-        resources={"oci-image": "kennethreitz/httpbin"},
+        resources={"oci-image": "ghcr.io/mccutchen/go-httpbin"},
         trust=True,
     )
 

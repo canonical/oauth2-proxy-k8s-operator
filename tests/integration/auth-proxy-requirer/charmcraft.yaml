@@ -31,7 +31,7 @@ resources:
   oci-image:
     type: oci-image
     description: OCI image for IAP Tester container
-    upstream-source: kennethreitz/httpbin
+    upstream-source: ghcr.io/mccutchen/go-httpbin
 
 requires:
   auth-proxy:
